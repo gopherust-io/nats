@@ -45,7 +45,9 @@ func startPublishSpan(ctx context.Context, subject string, allowTracing bool) (c
 
 	return telem.StartSpan(ctx, "nats.publish",
 		trace.WithAttributes(
-			tel.MessagingSystem(), tel.MessagingOperationPublish(), tel.MessagingSubject(subject),
+			tel.MessagingSystem(),
+			tel.MessagingOperationPublish(),
+			tel.MessagingSubject(subject),
 		),
 	)
 }
@@ -117,7 +119,9 @@ func startProcessSpan(ctx context.Context, msg *natspkg.Msg, allowTracing bool, 
 	}
 
 	attrs := []attribute.KeyValue{
-		tel.MessagingSystem(), tel.MessagingOperationProcess(), tel.MessagingSubject(subject),
+		tel.MessagingSystem(),
+		tel.MessagingOperationProcess(),
+		tel.MessagingSubject(subject),
 	}
 	if meta != nil {
 		attrs = append(attrs,
