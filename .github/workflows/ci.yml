@@ -65,7 +65,6 @@ jobs:
 
   race:
     name: Race detector
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -88,7 +87,6 @@ jobs:
 
   bench:
     name: Critical benchmarks
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -111,7 +109,6 @@ jobs:
 
   fuzz:
     name: Fuzz smoke
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -135,7 +132,6 @@ jobs:
 
   vuln:
     name: Vulnerability scan
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
