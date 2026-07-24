@@ -1,0 +1,104 @@
+2026/07/22 15:29:12 INFO NATS connected
+goos: darwin
+goarch: arm64
+pkg: github.com/gopherust-io/nats
+cpu: Apple M4 Pro
+BenchmarkPublishJSON-14                         	   30740	     38021 ns/op	    2904 B/op	      41 allocs/op
+2026/07/22 15:29:13 INFO NATS connected
+2026/07/22 15:29:13 WARN NATS disconnected
+2026/07/22 15:29:13 INFO NATS connection closed
+BenchmarkPublishJSONNoMetrics-14                	   32739	     38053 ns/op	    2517 B/op	      42 allocs/op
+2026/07/22 15:29:14 WARN NATS disconnected
+2026/07/22 15:29:14 INFO NATS connection closed
+BenchmarkProcessMessageMetrics-14               	19155201	        61.35 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAttrCacheSubjectOpts-14                	83361554	        14.51 ns/op	       0 B/op	       0 allocs/op
+BenchmarkEncodeJSON-14                          	 6456889	       185.7 ns/op	     129 B/op	       3 allocs/op
+BenchmarkEncodeProto-14                         	33278715	        35.20 ns/op	       8 B/op	       1 allocs/op
+BenchmarkEncodeMessagePack-14                   	 9458677	       126.2 ns/op	     136 B/op	       4 allocs/op
+BenchmarkDecodeJSON-14                          	 9568875	       124.5 ns/op	     130 B/op	       3 allocs/op
+BenchmarkMessageTypeFromHeader-14               	265504518	         4.538 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNeedsContentTypeHeader-14              	749360898	         1.599 ns/op	       0 B/op	       0 allocs/op
+BenchmarkValidMessageType-14                    	751045398	         1.599 ns/op	       0 B/op	       0 allocs/op
+2026/07/22 15:29:25 INFO NATS connected
+BenchmarkPublishProto-14                        	   30596	     38284 ns/op	    3307 B/op	      45 allocs/op
+2026/07/22 15:29:26 WARN NATS disconnected
+2026/07/22 15:29:26 INFO NATS connection closed
+BenchmarkRecordMessageMetricsNoRedelivery-14    	19064173	        61.90 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAttrCacheSubjectRecordOpts-14          	82869350	        14.19 ns/op	       0 B/op	       0 allocs/op
+2026/07/22 15:29:29 INFO NATS connected
+BenchmarkPublishWithMsgID-14                    	   35769	     34190 ns/op	    3716 B/op	      54 allocs/op
+2026/07/22 15:29:30 INFO NATS connected
+2026/07/22 15:29:30 WARN NATS disconnected
+2026/07/22 15:29:30 INFO NATS connection closed
+BenchmarkPublishBytes-14                        	   32724	     35303 ns/op	    2233 B/op	      39 allocs/op
+2026/07/22 15:29:31 INFO NATS connected
+--- FAIL: BenchmarkPublishAsyncBytes
+    bench_test.go:265: async publish pending limit exceeded
+2026/07/22 15:29:31 INFO NATS connected
+2026/07/22 15:29:31 WARN NATS disconnected
+2026/07/22 15:29:31 INFO NATS connection closed
+2026/07/22 15:29:31 WARN NATS disconnected
+2026/07/22 15:29:31 INFO NATS connection closed
+BenchmarkPublishJSONTracingNotRecording-14      	   32979	     36573 ns/op	    2635 B/op	      42 allocs/op
+2026/07/22 15:29:32 WARN NATS disconnected
+2026/07/22 15:29:32 INFO NATS connection closed
+BenchmarkHandlerTyped-14                        	 7953091	       147.9 ns/op	     141 B/op	       4 allocs/op
+BenchmarkCodecComparison/JSON/Encode-14         	 4112426	       277.2 ns/op	 414.90 MB/s	     144 B/op	       2 allocs/op
+BenchmarkCodecComparison/MessagePack/Encode-14  	 6798547	       175.8 ns/op	 568.79 MB/s	     240 B/op	       3 allocs/op
+BenchmarkCodecComparison/Proto/Encode-14        	28440877	        40.84 ns/op	1052.91 MB/s	      48 B/op	       1 allocs/op
+BenchmarkCodecComparison/JSON/Decode-14         	 4649194	       259.1 ns/op	 443.85 MB/s	     242 B/op	       3 allocs/op
+BenchmarkCodecComparison/MessagePack/Decode-14  	 4349023	       275.4 ns/op	 363.08 MB/s	      88 B/op	       5 allocs/op
+BenchmarkCodecComparison/Proto/Decode-14        	20579188	        57.19 ns/op	 751.94 MB/s	     112 B/op	       2 allocs/op
+BenchmarkCodecComparison/JSON/RoundTrip-14      	 2005098	       604.3 ns/op	     704 B/op	       7 allocs/op
+BenchmarkCodecComparison/MessagePack/RoundTrip-14         	 2297452	       520.6 ns/op	     488 B/op	      10 allocs/op
+BenchmarkCodecComparison/Proto/RoundTrip-14               	 8976741	       133.1 ns/op	     224 B/op	       4 allocs/op
+FAIL
+exit status 1
+FAIL	github.com/gopherust-io/nats	35.604s
+PASS
+ok  	github.com/gopherust-io/nats/idempotency	1.407s
+2026/07/22 15:29:49 INFO starting worker pool
+2026/07/22 15:29:50 INFO shutdown worker pool
+goos: darwin
+goarch: arm64
+pkg: github.com/gopherust-io/nats/workerpool
+cpu: Apple M4 Pro
+BenchmarkWorkerPool_Publish-14            	 3722824	       313.4 ns/op	       0 B/op	       0 allocs/op
+2026/07/22 15:29:50 INFO starting worker pool
+2026/07/22 15:29:50 INFO shutdown worker pool
+BenchmarkWorkerPool_PublishParallel-14    	2026/07/22 15:29:50 INFO starting worker pool
+2026/07/22 15:29:50 INFO shutdown worker pool
+2026/07/22 15:29:50 INFO starting worker pool
+2026/07/22 15:29:50 INFO shutdown worker pool
+2026/07/22 15:29:50 INFO starting worker pool
+2026/07/22 15:29:50 INFO shutdown worker pool
+2026/07/22 15:29:50 INFO starting worker pool
+2026/07/22 15:29:51 INFO shutdown worker pool
+ 5884246	       212.7 ns/op	       0 B/op	       0 allocs/op
+2026/07/22 15:29:51 INFO starting worker pool
+2026/07/22 15:29:53 INFO shutdown worker pool
+BenchmarkWorkerPool_TryPublish-14         	 3852318	       312.1 ns/op	       0 B/op	       0 allocs/op
+2026/07/22 15:29:53 INFO starting worker pool
+2026/07/22 15:29:54 INFO shutdown worker pool
+BenchmarkWorkerPool_PublishApplyFn-14     	 3831972	       311.1 ns/op	       0 B/op	       0 allocs/op
+2026/07/22 15:29:54 INFO starting worker pool
+2026/07/22 15:29:55 INFO shutdown worker pool
+BenchmarkWorkerPool_QueueDepth-14         	749065615	         1.612 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	github.com/gopherust-io/nats/workerpool	6.996s
+goos: darwin
+goarch: arm64
+pkg: github.com/gopherust-io/tel
+cpu: Apple M4 Pro
+BenchmarkAttrCache_SubjectMiss-14                     	80569029	        14.75 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAttrCache_SubjectRecordOpts-14               	80764570	        14.73 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFastHistogram_RecordWith_CachedSubject-14    	19134877	        59.85 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFastGauge_RecordWith_CachedSubject-14        	21395967	        52.36 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTimer_StopWith-14                            	10496356	       114.3 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRegistry_CounterCacheHit-14                  	203650288	         5.888 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFastCounter_WithAttrs-14                     	15724917	        75.76 ns/op	      88 B/op	       3 allocs/op
+BenchmarkInjectExtractContext-14                      	 5622668	       213.2 ns/op	     208 B/op	       4 allocs/op
+BenchmarkStartSpan-14                                 	 3128082	       397.6 ns/op	    1116 B/op	       3 allocs/op
+PASS
+ok  	github.com/gopherust-io/tel	11.684s
+FAIL

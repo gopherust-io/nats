@@ -1,0 +1,13 @@
+services:
+  nats:
+    image: nats:2.14
+    command: ["-c", "/etc/nats/nats.conf"]
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    volumes:
+      - ./nats.conf:/etc/nats/nats.conf:ro
+      - js-auth:/data
+
+volumes:
+  js-auth:

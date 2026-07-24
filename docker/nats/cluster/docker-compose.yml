@@ -1,0 +1,80 @@
+# 3-node NATS JetStream cluster — HA / Replicas: 3 testing.
+#
+#   docker compose -f docker/nats/cluster/docker-compose.yml up -d
+#   Client: nats://127.0.0.1:4222,nats://127.0.0.1:4223,nats://127.0.0.1:4224
+
+services:
+  nats-1:
+    image: nats:2.14
+    container_name: nats-cluster-1
+    command: ["-c", "/etc/nats/nats.conf"]
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    volumes:
+      - ./n1.conf:/etc/nats/nats.conf:ro
+      - js-n1:/data
+    networks:
+      - nats-cluster
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8222/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+    restart: unless-stopped
+
+  nats-2:
+    image: nats:2.14
+    container_name: nats-cluster-2
+    command: ["-c", "/etc/nats/nats.conf"]
+    ports:
+      - "4223:4222"
+      - "8223:8222"
+    volumes:
+      - ./n2.conf:/etc/nats/nats.conf:ro
+      - js-n2:/data
+    networks:
+      - nats-cluster
+    depends_on:
+      nats-1:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8222/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+    restart: unless-stopped
+
+  nats-3:
+    image: nats:2.14
+    container_name: nats-cluster-3
+    command: ["-c", "/etc/nats/nats.conf"]
+    ports:
+      - "4224:4222"
+      - "8224:8222"
+    volumes:
+      - ./n3.conf:/etc/nats/nats.conf:ro
+      - js-n3:/data
+    networks:
+      - nats-cluster
+    depends_on:
+      nats-1:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8222/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+    restart: unless-stopped
+
+networks:
+  nats-cluster:
+    name: nats-cluster
+
+volumes:
+  js-n1:
+  js-n2:
+  js-n3:

@@ -1,0 +1,26 @@
+# Single-node NATS with JetStream — everyday local development.
+#
+#   docker compose -f docker/nats/single/docker-compose.yml up -d
+#   Client: nats://127.0.0.1:4222
+
+services:
+  nats:
+    image: nats:2.14
+    container_name: nats-single
+    command: ["-c", "/etc/nats/nats.conf"]
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    volumes:
+      - ./nats.conf:/etc/nats/nats.conf:ro
+      - nats-js:/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8222/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    restart: unless-stopped
+
+volumes:
+  nats-js:

@@ -1,0 +1,212 @@
+version: "2"
+run:
+  modules-download-mode: readonly
+  tests: true
+  timeout: 5m
+linters:
+  default: all
+  disable:
+    # No policy / wrong fit for this SDK
+    - arangolint
+    - depguard
+    - dupl
+    - exhaustruct
+    - ginkgolinter
+    - gomodguard
+    - ireturn
+    - promlinter
+    - tagliatelle
+    - unqueryvet
+    - wrapcheck
+    - wsl
+    - wsl_v5
+    - zerologlint
+    # Noisy on this SDK; revisit later
+    - goconst
+    - modernize
+    - tagalign
+    - mnd
+  settings:
+    cyclop:
+      max-complexity: 20
+    funlen:
+      lines: 120
+      statements: 80
+    gocognit:
+      min-complexity: 25
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - performance
+        - style
+      disabled-checks:
+        - hugeParam
+        - rangeValCopy
+        - typeDefFirst
+        - unnamedResult
+    gocyclo:
+      min-complexity: 20
+    gosec:
+      excludes:
+        - G115
+    govet:
+      disable:
+        - copylocks
+      enable-all: true
+    lll:
+      line-length: 140
+    mnd:
+      ignored-files:
+        - '.*_test\.go$'
+      ignored-functions:
+        - 'time\.(Second|Minute|Hour|Duration)'
+    nestif:
+      min-complexity: 5
+    perfsprint:
+      err-error: false
+      error-format: false
+      errorf: false
+      sprintf1: false
+    revive:
+      rules:
+        - name: package-comments
+          disabled: true
+        - name: exported
+          arguments:
+            - disableStutteringCheck
+    varnamelen:
+      min-name-length: 2
+      ignore-names:
+        - c
+        - i
+        - j
+        - k
+        - n
+        - t
+        - x
+        - err
+        - ctx
+        - js
+        - bp
+        - id
+        - fn
+        - ok
+        - cc
+        - sc
+        - sr
+        - tel
+        - msg
+        - sub
+        - cfg
+      ignore-decls:
+        - c echo.Context
+        - t testing.TB
+        - i int
+        - j int
+        - n int
+        - w http.ResponseWriter
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - path: .
+        linters:
+          - containedctx
+          - err113
+          - funcorder
+          - noinlineerr
+          - recvcheck
+      - path: _test\.go
+        linters:
+          - cyclop
+          - err113
+          - forcetypeassert
+          - funcorder
+          - funlen
+          - gochecknoglobals
+          - gocognit
+          - gocyclo
+          - noinlineerr
+          - nlreturn
+          - paralleltest
+          - testableexamples
+          - testpackage
+          - varnamelen
+          - wsl_v5
+          - copyloopvar
+          - intrange
+          - usetesting
+          - testifylint
+          - unparam
+          - nilnil
+          - embeddedstructfieldcheck
+          - gofumpt
+      - path: metrics\.go
+        linters:
+          - funlen
+          - maintidx
+          - nestif
+      - path: codec\.go
+        linters:
+          - gochecknoglobals
+          - exhaustive
+          - forcetypeassert
+      - path: tracing\.go
+        linters:
+          - gochecknoglobals
+          - forcetypeassert
+          - gosec
+      - path: consumer_pull\.go
+        linters:
+          - contextcheck
+          - copyloopvar
+          - gocognit
+          - nestif
+          - nlreturn
+          - gocritic
+      - path: supervisor\.go
+        linters:
+          - cyclop
+          - gocognit
+          - gocyclo
+          - nestif
+          - gocritic
+          - varnamelen
+      - path: client\.go
+        linters:
+          - interfacebloat
+          - lll
+      - path: auth\.go
+        linters:
+          - nlreturn
+          - varnamelen
+      - path: dlq/
+        linters:
+          - gocritic
+          - nestif
+          - perfsprint
+          - govet
+      - path: shadow/
+        linters:
+          - gocritic
+          - gosec
+          - govet
+      - path: idempotency/
+        linters:
+          - gochecknoglobals
+          - gocritic
+          - intrange
+          - govet
+      - path: soft_liveness\.go
+        linters:
+          - govet
+      - path: dlq_reexport\.go
+        linters:
+          - govet
+      - path: shadow_reexport\.go
+        linters:
+          - govet
