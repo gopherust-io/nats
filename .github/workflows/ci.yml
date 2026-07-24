@@ -26,6 +26,9 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+          cache-dependency-path: go.sum
+      - name: Download modules
+        run: go mod download
       - name: Check gofmt
         run: test -z "$(gofmt -l .)"
       - name: Run go vet
@@ -50,6 +53,7 @@ jobs:
           version: v2.12.2
           args: --timeout=3m
           skip-cache: false
+          skip-save-cache: ${{ github.ref != 'refs/heads/main' }}
 
   race:
     name: Race detector
@@ -65,6 +69,9 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+          cache-dependency-path: go.sum
+      - name: Download modules
+        run: go mod download
       - name: Run tests with race detector
         run: |
           set -euo pipefail
@@ -85,6 +92,9 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+          cache-dependency-path: go.sum
+      - name: Download modules
+        run: go mod download
       - name: Run critical benchmarks
         run: |
           go test -bench='BenchmarkCodecComparison|BenchmarkPublishJSON|BenchmarkPublishBytes|BenchmarkPublishAsyncBytes|BenchmarkWorkerPool' \
@@ -105,6 +115,9 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+          cache-dependency-path: go.sum
+      - name: Download modules
+        run: go mod download
       - name: Run fuzz smoke tests
         run: |
           set -euo pipefail
@@ -126,16 +139,19 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+          cache-dependency-path: go.sum
       - name: Cache govulncheck
+        id: govulncheck-cache
         uses: actions/cache@v4
         with:
           path: ~/go/bin/govulncheck
-          key: govulncheck-v1.6.0-${{ runner.os }}
+          key: govulncheck-v1.6.0-${{ runner.os }}-${{ hashFiles('go.mod') }}
+          restore-keys: |
+            govulncheck-v1.6.0-${{ runner.os }}-
       - name: Install govulncheck
-        run: |
-          if [ ! -x "$HOME/go/bin/govulncheck" ]; then
-            go install golang.org/x/vuln/cmd/govulncheck@v1.6.0
-          fi
-          echo "$HOME/go/bin" >> "$GITHUB_PATH"
+        if: steps.govulncheck-cache.outputs.cache-hit != 'true'
+        run: go install golang.org/x/vuln/cmd/govulncheck@v1.6.0
+      - name: Add Go bin to PATH
+        run: echo "$HOME/go/bin" >> "$GITHUB_PATH"
       - name: Run govulncheck
         run: govulncheck ./...
