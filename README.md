@@ -4,6 +4,8 @@ JetStream client for Go. Telemetry is optional via [tel](https://github.com/goph
 
 Module: [`github.com/gopherust-io/nats`](https://github.com/gopherust-io/nats)
 
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/gopherust-io/nats/badge)](https://scorecard.dev/viewer/?uri=github.com/gopherust-io/nats)
+
 **Mental model:** the app **connects and binds**. Ops **owns streams** (CLI/platform). If no stream captures the subject, the message is **not retained**—that is topology, not a client bug.
 
 ```bash
