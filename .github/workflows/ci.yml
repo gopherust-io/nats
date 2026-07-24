@@ -104,8 +104,9 @@ jobs:
           cache: true
       - name: Run fuzz smoke tests
         run: |
+          set -euo pipefail
           for fuzz in FuzzDecodeJSON FuzzCommonWildcardSubject FuzzShardIndex; do
-            go test -fuzz="$fuzz" -fuzztime=2s . -run '^$'
+            go test -fuzz="$fuzz" -fuzztime=2s -fuzzminimizetime=0 -timeout=5m . -run '^$'
           done
 
   vuln:
