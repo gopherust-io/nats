@@ -14,9 +14,9 @@ import (
 )
 
 type testPublisher struct {
-	mu       sync.Mutex
 	subjects []string
 	msgs     []RawPublish
+	mu       sync.Mutex
 }
 
 func (p *testPublisher) PublishRaw(_ context.Context, subject string, msg RawPublish) error {

@@ -5,21 +5,21 @@ import (
 )
 
 type Message struct {
-	Data        any
-	Header      map[string][]string
-	MessageType MessageType
+	Data   any
+	Header map[string][]string
 	// Expect applies optimistic concurrency PubOpts (ExpectedStream / LastSeq / LastMsgId).
-	Expect *PublishExpectation
+	Expect      *PublishExpectation
+	MessageType MessageType
 }
 
 // PublishExpectation is optimistic concurrency for JetStream publish.
 // Zero LastSeq / LastSeqPerSubject are ignored unless the corresponding Set* helper is used
 // (pointers distinguish "unset" from "expect zero").
 type PublishExpectation struct {
-	Stream            string
-	LastMsgID         string
 	LastSeq           *uint64
 	LastSeqPerSubject *uint64
+	Stream            string
+	LastMsgID         string
 }
 
 // WithMsgID sets the JetStream deduplication header (requires stream DuplicateWindow).

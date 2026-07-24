@@ -15,8 +15,8 @@ import (
 )
 
 type orderEvent struct {
-	ID int    `json:"id"`
 	TS string `json:"ts"`
+	ID int    `json:"id"`
 }
 
 func runWorker(ctx context.Context, client libnats.Client, telem *tel.Telemetry) error {

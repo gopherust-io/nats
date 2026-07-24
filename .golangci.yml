@@ -215,12 +215,9 @@ linters:
       - path: validate\.go
         linters:
           - gocognit
-      - path: config\.go
+      - path: publisher\.go
         linters:
-          - govet
-      - path: model\.go
-        linters:
-          - govet
+          - varnamelen
     paths:
       - examples
       - tools

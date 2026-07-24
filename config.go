@@ -157,25 +157,25 @@ type PublisherConfig struct {
 }
 
 type StreamConfig struct {
-	Name            string
-	Description     string
-	Subjects        []string
-	Replicas        int
-	Retention       RetentionPolicy
-	MaxMsgs         int64
+	// Mirror configures this stream as a mirror of another stream (geo / DR).
+	// Prefer nats CLI or platform ops for complex cross-domain setups; see devops.md.
+	Mirror      *StreamSource
+	Name        string
+	Description string
+	Subjects    []string
+	// Sources aggregates messages from other streams into this stream.
+	Sources         []*StreamSource
+	Storage         StorageType
 	MaxBytes        int64
 	MaxAge          time.Duration
-	Storage         StorageType
+	MaxMsgs         int64
 	Discard         DiscardPolicy
 	DuplicateWindow time.Duration
 	MaxConsumers    int
+	Retention       RetentionPolicy
+	Replicas        int
 	MaxMsgSize      int32
 	NoAck           bool
-	// Mirror configures this stream as a mirror of another stream (geo / DR).
-	// Prefer nats CLI or platform ops for complex cross-domain setups; see devops.md.
-	Mirror *StreamSource
-	// Sources aggregates messages from other streams into this stream.
-	Sources []*StreamSource
 }
 
 // StreamSource is a JetStream stream source or mirror origin.
