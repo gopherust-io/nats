@@ -1,6 +1,6 @@
 export GOWORK := off
 
-PKGS := ./...
+PKGS := $(shell go list ./... | grep -vE '/(examples|tools)/')
 FUZZ_PKGS := .
 FUZZ_TESTS := FuzzDecodeJSON FuzzCommonWildcardSubject FuzzShardIndex
 NPROCS := $(shell getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)

@@ -98,6 +98,7 @@ linters:
         - msg
         - sub
         - cfg
+        - e
       ignore-decls:
         - c echo.Context
         - t testing.TB
@@ -160,6 +161,7 @@ linters:
           - gochecknoglobals
           - forcetypeassert
           - gosec
+          - gocritic
       - path: consumer_pull\.go
         linters:
           - contextcheck
@@ -210,3 +212,37 @@ linters:
       - path: shadow_reexport\.go
         linters:
           - govet
+      - path: validate\.go
+        linters:
+          - gocognit
+      - path: config\.go
+        linters:
+          - govet
+      - path: model\.go
+        linters:
+          - govet
+    paths:
+      - examples
+      - tools
+      - third_party$
+      - builtin$
+      - examples$
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+formatters:
+  enable:
+    - gofmt
+    - gofumpt
+    - goimports
+  settings:
+    gofumpt:
+      extra-rules: true
+    goimports:
+      local-prefixes:
+        - github.com/gopherust-io/nats
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$

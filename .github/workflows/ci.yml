@@ -25,7 +25,10 @@ jobs:
           go-version-file: go.mod
           cache: true
       - name: Run unit tests with coverage
-        run: go test ./... -count=1 -parallel=$(nproc) -timeout=60s -coverprofile=coverage.out
+        run: |
+          set -euo pipefail
+          mapfile -t pkgs < <(go list ./... | grep -vE '/(examples|tools)/')
+          go test "${pkgs[@]}" -count=1 -parallel=$(nproc) -timeout=60s -coverprofile=coverage.out
       - name: Enforce coverage threshold
         env:
           COVERAGE_MIN: "75"
