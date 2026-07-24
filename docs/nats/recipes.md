@@ -21,6 +21,8 @@ client, err := libnats.NewClient(ctx, &cfg)
 defer client.Connector().Shutdown()
 ```
 
+**Streams:** `NewClient` does not create or update streams. Prefer `nats stream add` / platform ops. Labs and apps that bootstrap in-process should call `client.Streams().CreateOrUpdateStream` after connect (setting `cfg.Stream` alone has no effect).
+
 ---
 
 ## Recipe A — Worker / job processor
@@ -36,16 +38,6 @@ cfg := libnats.DefaultConfig()
 cfg.Conn.Address = os.Getenv("NATS_URL")
 cfg.Conn.ClientName = "orders-worker"
 
-cfg.Stream = libnats.StreamConfig{
-    Name:      "ORDERS",
-    Subjects:  []string{"orders.>"},
-    Replicas:  3,
-    Storage:   libnats.FileStorage,
-    Retention: libnats.WorkQueuePolicy,
-    MaxAge:    72 * time.Hour,
-    Discard:   libnats.DiscardOld,
-}
-
 cfg.RuntimeConsumer.WorkerPoolEnabled = true
 cfg.RuntimeConsumer.WorkerPoolSize = 8
 cfg.RuntimeConsumer.WorkerBufferSize = 256
@@ -57,6 +49,16 @@ cfg.Backpressure = libnats.BackpressureConfig{
 }
 
 client, _ := libnats.NewClient(ctx, &cfg)
+
+_, _ = client.Streams().CreateOrUpdateStream(ctx, libnats.StreamConfig{
+    Name:      "ORDERS",
+    Subjects:  []string{"orders.>"},
+    Replicas:  3,
+    Storage:   libnats.FileStorage,
+    Retention: libnats.WorkQueuePolicy,
+    MaxAge:    72 * time.Hour,
+    Discard:   libnats.DiscardOld,
+})
 
 client.Consumers().CreateOrUpdateConsumer(ctx, "ORDERS", libnats.DurableConsumerConfig{
     Durable:       "orders-processor",

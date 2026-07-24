@@ -27,21 +27,21 @@ func TestMessageWithMsgIDPreservesExistingHeader(t *testing.T) {
 
 func TestDevConfig(t *testing.T) {
 	cfg := DevConfig()
-	assert.Equal(t, MemoryStorage, cfg.Stream.Storage)
+	assert.Empty(t, cfg.Stream.Name)
 	assert.False(t, cfg.Metrics.AllowMetrics)
 	assert.False(t, cfg.Conn.AllowReconnect)
 }
 
 func TestProdWorkerConfig(t *testing.T) {
 	cfg := ProdWorkerConfig()
-	assert.Equal(t, WorkQueuePolicy, cfg.Stream.Retention)
+	assert.Empty(t, cfg.Stream.Name)
 	assert.True(t, cfg.RuntimeConsumer.WorkerPoolEnabled)
 	assert.Equal(t, BackpressureNak, cfg.Backpressure.Mode)
 }
 
 func TestProdFanOutConfig(t *testing.T) {
 	cfg := ProdFanOutConfig()
-	assert.Equal(t, LimitsPolicy, cfg.Stream.Retention)
+	assert.Empty(t, cfg.Stream.Name)
 	assert.Equal(t, BackpressureBlock, cfg.Backpressure.Mode)
 }
 

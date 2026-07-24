@@ -2,6 +2,7 @@ package nats
 
 import (
 	"context"
+	"encoding/hex"
 	"sync"
 
 	natspkg "github.com/nats-io/nats.go"
@@ -9,6 +10,8 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/gopherust-io/tel"
+
+	"github.com/gopherust-io/nats/internal/bytesconv"
 )
 
 var headerCarrierPool = sync.Pool{
@@ -53,6 +56,49 @@ func startPublishSpan(ctx context.Context, subject string, allowTracing bool) (c
 	return telem.StartSpan(ctx, "nats.publish", trace.WithAttributes(attrs[:]...))
 }
 
+func startRequestSpan(ctx context.Context, subject string, allowTracing bool) (context.Context, trace.Span) {
+	if !allowTracing {
+		return ctx, trace.SpanFromContext(ctx)
+	}
+
+	telem := tel.FromCtx(ctx)
+	attrs := [...]attribute.KeyValue{
+		tel.MessagingSystem(),
+		attribute.String("messaging.operation", "request"),
+		tel.MessagingSubject(subject),
+	}
+
+	return telem.StartSpan(ctx, "nats.request", trace.WithAttributes(attrs[:]...))
+}
+
+func startReplySpan(ctx context.Context, msg *natspkg.Msg, allowTracing bool) (context.Context, trace.Span) {
+	if !allowTracing {
+		return ctx, trace.SpanFromContext(ctx)
+	}
+
+	carrier := acquireHeaderCarrier()
+	if msg != nil && msg.Header != nil {
+		for k, v := range msg.Header {
+			carrier[k] = v
+		}
+	}
+	ctx = tel.ExtractContext(ctx, carrier)
+	releaseHeaderCarrier(carrier)
+
+	telem := tel.FromCtx(ctx)
+	subject := empty
+	if msg != nil {
+		subject = msg.Subject
+	}
+	attrs := [...]attribute.KeyValue{
+		tel.MessagingSystem(),
+		attribute.String("messaging.operation", "reply"),
+		tel.MessagingSubject(subject),
+	}
+
+	return telem.StartSpan(ctx, "nats.reply", trace.WithAttributes(attrs[:]...))
+}
+
 func injectTraceContext(ctx context.Context, msg *Message) {
 	span := trace.SpanFromContext(ctx)
 	if !span.IsRecording() {
@@ -66,10 +112,19 @@ func injectTraceContext(ctx context.Context, msg *Message) {
 		if headers == nil {
 			headers = make(map[string][]string, 1)
 		}
-		setHeaderValue(headers, HeaderTraceID, sc.TraceID().String())
+		setHeaderValue(headers, HeaderTraceID, traceIDString(sc.TraceID()))
 	}
 
 	msg.Header = headers
+}
+
+// traceIDString hex-encodes id into a heap buffer and returns a string sharing
+// that buffer (one alloc; no extra string copy from []byte).
+func traceIDString(id trace.TraceID) string {
+	buf := make([]byte, hex.EncodedLen(len(id)))
+	hex.Encode(buf, id[:])
+
+	return bytesconv.BytesToString(buf)
 }
 
 func setHeaderValue(headers map[string][]string, key, value string) {

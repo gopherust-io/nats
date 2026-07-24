@@ -37,10 +37,12 @@ Subjects: []string{"orders.>"}
 
 ## Stream configuration
 
+Prefer provisioning with the `nats` CLI (or platform ops). In code, use `Streams().CreateOrUpdateStream` only when the app intentionally owns bootstrap (labs/examples). `NewClient` does **not** create streams from `cfg.Stream`.
+
 Defined in `libnats.StreamConfig` ([`nats/config.go`](../../nats/config.go)):
 
 ```go
-client.Streams().CreateOrUpdateStream(ctx, libnats.StreamConfig{
+_, err := client.Streams().CreateOrUpdateStream(ctx, libnats.StreamConfig{
     Name:        "ORDERS",
     Description: "Order lifecycle events",
     Subjects:    []string{"orders.>"},
@@ -53,8 +55,6 @@ client.Streams().CreateOrUpdateStream(ctx, libnats.StreamConfig{
     DuplicateWindow: 2 * time.Minute,
 })
 ```
-
-Or set `cfg.Stream` in `libnats.Config` to auto-create on `NewClient`.
 
 ## Multi-subject streams
 

@@ -256,9 +256,9 @@ Do **not** put multiple durables on WorkQueue for the same job — they compete 
 
 | Concept | API |
 |---------|-----|
-| Connect + optional stream | `NewClient(ctx, &cfg)` |
+| Connect | `NewClient(ctx, &cfg)` |
 | Publish | `client.Publisher().Publish*` |
-| Manage stream | `client.Streams().CreateOrUpdateStream` |
+| Manage stream | `nats stream add` / `client.Streams().CreateOrUpdateStream` |
 | Manage durable | `client.Consumers().CreateOrUpdateConsumer` |
 | Push workers | `Consumer().QueueSubscribeBound` / `SetupWorker` / `SuperviseQueueSubscribeBound` |
 | Pull | `Consumer().Pull` → `Fetch` / `Process` |
@@ -274,14 +274,16 @@ Do **not** put multiple durables on WorkQueue for the same job — they compete 
 ```go
 cfg := libnats.DefaultConfig()
 cfg.Conn.Address = "nats://127.0.0.1:4222"
-cfg.Stream = libnats.StreamConfig{
-    Name: "ORDERS", Subjects: []string{"orders.>"},
-    Retention: libnats.WorkQueuePolicy, Replicas: 1,
-}
 
 client, err := libnats.NewClient(ctx, &cfg)
 if err != nil { /* ... */ }
 defer client.Connector().Shutdown()
+
+// Provision stream via CLI in production; examples may call CreateOrUpdateStream:
+_, _ = client.Streams().CreateOrUpdateStream(ctx, libnats.StreamConfig{
+    Name: "ORDERS", Subjects: []string{"orders.>"},
+    Retention: libnats.WorkQueuePolicy, Replicas: 1,
+})
 
 // Publish
 _ = client.Publisher().PublishJSON(ctx, "orders.created", map[string]any{"id": 1})

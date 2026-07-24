@@ -22,11 +22,6 @@ func buildWorkerConfig() libnats.Config {
 	cfg.Conn.Address = envOr("NATS_URL", "nats://127.0.0.1:4222")
 	cfg.Conn.ClientName = clientName("worker")
 
-	cfg.Stream.Replicas = 1
-	cfg.Stream.Storage = libnats.MemoryStorage
-	cfg.Stream.MaxAge = 24 * time.Hour
-	cfg.Stream.DuplicateWindow = 2 * time.Minute
-
 	cfg.RuntimeConsumer.WorkerPoolEnabled = true
 	ackWait := ackWaitForHandler(handlerP99)
 	cfg.RuntimeConsumer.AckWait = ackWait
@@ -49,17 +44,6 @@ func buildPullConfig() libnats.Config {
 
 	cfg.Conn.Address = envOr("NATS_URL", "nats://127.0.0.1:4222")
 	cfg.Conn.ClientName = clientName("puller")
-
-	cfg.Stream = libnats.StreamConfig{
-		Name:            streamName,
-		Subjects:        []string{subjectFilter},
-		Replicas:        1,
-		Storage:         libnats.MemoryStorage,
-		Retention:       libnats.WorkQueuePolicy,
-		MaxAge:          24 * time.Hour,
-		Discard:         libnats.DiscardOld,
-		DuplicateWindow: 2 * time.Minute,
-	}
 
 	cfg.RuntimeConsumer.WorkerPoolEnabled = false
 	batchP99 := handlerP99 * 2

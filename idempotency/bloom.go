@@ -2,13 +2,15 @@ package idempotency
 
 import (
 	"context"
-	"hash/fnv"
 	"sync/atomic"
 )
 
 const (
 	defaultBloomBits   = 1 << 20 // 1 Mib bits ≈ 128 KiB
 	defaultBloomHashes = 7
+
+	fnvOffset64 = 14695981039346656037
+	fnvPrime64  = 1099511628211
 )
 
 // BloomStore is an in-memory probabilistic Seen filter with optional async Mark to a backend.
@@ -86,10 +88,17 @@ func (b *BloomStore) set(id string) {
 	}
 }
 
+// bloomHash is FNV-1a over id then two little-endian salt bytes, without allocations.
 func bloomHash(id string, salt int) uint64 {
-	h := fnv.New64a()
-	_, _ = h.Write([]byte(id))
-	_, _ = h.Write([]byte{byte(salt), byte(salt >> 8)})
+	hash := uint64(fnvOffset64)
+	for i := range len(id) {
+		hash ^= uint64(id[i])
+		hash *= fnvPrime64
+	}
+	hash ^= uint64(byte(salt))
+	hash *= fnvPrime64
+	hash ^= uint64(byte(salt >> 8))
+	hash *= fnvPrime64
 
-	return h.Sum64()
+	return hash
 }

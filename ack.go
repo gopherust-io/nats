@@ -54,7 +54,11 @@ func TermWithReason(msg *natspkg.Msg, reason string) error {
 	}
 
 	// Match jetstream TermWithReason wire format for classic Msg.
-	if err := msg.Respond([]byte("+TERM " + reason)); err != nil {
+	const termPrefix = "+TERM "
+	b := make([]byte, 0, len(termPrefix)+len(reason))
+	b = append(b, termPrefix...)
+	b = append(b, reason...)
+	if err := msg.Respond(b); err != nil {
 		return fmt.Errorf("term with reason subject=%q: %w", msg.Subject, err)
 	}
 

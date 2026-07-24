@@ -37,32 +37,33 @@ const (
 	defaultMaxAckPending            = 1000
 	defaultQueueDepthSampleInterval = 5 * time.Second
 	defaultMetricsCollectInterval   = 15 * time.Second
+	defaultRequestTimeout           = 2 * time.Second
 
 	devInitialRetryAttempts = 1
 	devWorkerPoolSize       = 2
 	devWorkerBufferSize     = 32
-	devStreamReplicas       = defaultStreamReplicas
 
-	prodStreamReplicas      = 3
-	prodWorkerMaxAge        = 72 * time.Hour
 	prodWorkerPoolSize      = 8
 	prodWorkerBufferSize    = 256
 	prodWorkerAckWait       = 45 * time.Second
 	prodPendingMsgLimit     = 1000
 	prodPendingMsgBuffer    = 10 << 20 // 10 MiB
 	prodWorkerMaxAckPending = 1000
-	prodFanOutMaxAge        = 30 * 24 * time.Hour
-	prodFanOutMaxBytes      = 10 << 30 // 10 GiB
 	prodFanOutMaxAckPending = 500
 )
 
 type Config struct {
 	PublisherConfig PublisherConfig
+	RequesterConfig RequesterConfig
+	ResponderConfig ResponderConfig
 	Metrics         MetricsConfig
 	RuntimeConsumer RuntimeConsumerConfig
-	Stream          StreamConfig
-	Conn            Connection
-	Backpressure    BackpressureConfig
+	// Stream is an optional topology template for callers; NewClient does not
+	// create or update it. Provision streams via nats CLI / platform ops, or
+	// explicitly with Streams().CreateOrUpdateStream / SetupWorker.
+	Stream       StreamConfig
+	Conn         Connection
+	Backpressure BackpressureConfig
 }
 
 // ConsumerConfig is an alias kept for backward compatibility.
@@ -154,6 +155,24 @@ type PublisherConfig struct {
 	SkipSubjectValidation bool
 	// MaxAsyncPending caps in-flight PublishAsync requests (0 = defaultMaxAsyncPending, -1 = unlimited).
 	MaxAsyncPending int
+}
+
+// RequesterConfig configures core NATS request/reply client calls.
+type RequesterConfig struct {
+	MetricPrefix string
+	// Timeout is used when ctx has no deadline (0 = defaultRequestTimeout).
+	Timeout      time.Duration
+	AllowMetrics bool
+	AllowTracing bool
+	// SkipSubjectValidation skips per-request subject validation for trusted static subjects.
+	SkipSubjectValidation bool
+}
+
+// ResponderConfig configures core NATS reply subscribers.
+type ResponderConfig struct {
+	MetricPrefix string
+	AllowMetrics bool
+	AllowTracing bool
 }
 
 type StreamConfig struct {
@@ -278,6 +297,17 @@ func DefaultConfig() Config {
 			AllowTracing: true,
 			MetricPrefix: defaultMetricPrefix,
 		},
+		RequesterConfig: RequesterConfig{
+			Timeout:      defaultRequestTimeout,
+			AllowMetrics: true,
+			AllowTracing: true,
+			MetricPrefix: defaultMetricPrefix,
+		},
+		ResponderConfig: ResponderConfig{
+			AllowMetrics: true,
+			AllowTracing: true,
+			MetricPrefix: defaultMetricPrefix,
+		},
 		RuntimeConsumer: RuntimeConsumerConfig{
 			AckWait:          defaultAckWait,
 			IdleHeartbeat:    defaultIdleHeartbeat,
@@ -313,14 +343,12 @@ func DevConfig() Config {
 	cfg.Conn.AllowMetrics = false
 	cfg.PublisherConfig.AllowMetrics = false
 	cfg.PublisherConfig.AllowTracing = false
+	cfg.RequesterConfig.AllowMetrics = false
+	cfg.RequesterConfig.AllowTracing = false
+	cfg.ResponderConfig.AllowMetrics = false
+	cfg.ResponderConfig.AllowTracing = false
 	cfg.RuntimeConsumer.AllowMetrics = false
 	cfg.RuntimeConsumer.AllowTracing = false
-	cfg.Stream = StreamConfig{
-		Name:     "DEV_ORDERS",
-		Subjects: []string{"orders.>"},
-		Replicas: devStreamReplicas,
-		Storage:  MemoryStorage,
-	}
 	cfg.RuntimeConsumer.WorkerPoolEnabled = true
 	cfg.RuntimeConsumer.WorkerPoolSize = devWorkerPoolSize
 	cfg.RuntimeConsumer.WorkerBufferSize = devWorkerBufferSize
@@ -331,15 +359,6 @@ func DevConfig() Config {
 // ProdWorkerConfig returns a production job-queue worker configuration.
 func ProdWorkerConfig() Config {
 	cfg := DefaultConfig()
-	cfg.Stream = StreamConfig{
-		Name:      "ORDERS",
-		Subjects:  []string{"orders.>"},
-		Replicas:  prodStreamReplicas,
-		Storage:   FileStorage,
-		Retention: WorkQueuePolicy,
-		MaxAge:    prodWorkerMaxAge,
-		Discard:   DiscardOld,
-	}
 	cfg.RuntimeConsumer.WorkerPoolEnabled = true
 	cfg.RuntimeConsumer.WorkerPoolSize = prodWorkerPoolSize
 	cfg.RuntimeConsumer.WorkerBufferSize = prodWorkerBufferSize
@@ -355,16 +374,6 @@ func ProdWorkerConfig() Config {
 // ProdFanOutConfig returns a production event-bus configuration.
 func ProdFanOutConfig() Config {
 	cfg := DefaultConfig()
-	cfg.Stream = StreamConfig{
-		Name:      "ORDERS",
-		Subjects:  []string{"orders.>"},
-		Replicas:  prodStreamReplicas,
-		Storage:   FileStorage,
-		Retention: LimitsPolicy,
-		MaxAge:    prodFanOutMaxAge,
-		MaxBytes:  prodFanOutMaxBytes,
-		Discard:   DiscardOld,
-	}
 	cfg.Backpressure.Mode = BackpressureBlock
 	cfg.Backpressure.MaxAckPending = prodFanOutMaxAckPending
 
@@ -382,6 +391,11 @@ func ThroughputConfig() Config {
 	cfg.PublisherConfig.AllowMetrics = false
 	cfg.PublisherConfig.AllowTracing = false
 	cfg.PublisherConfig.SkipSubjectValidation = true
+	cfg.RequesterConfig.AllowMetrics = false
+	cfg.RequesterConfig.AllowTracing = false
+	cfg.RequesterConfig.SkipSubjectValidation = true
+	cfg.ResponderConfig.AllowMetrics = false
+	cfg.ResponderConfig.AllowTracing = false
 	cfg.RuntimeConsumer.AllowMetrics = false
 	cfg.RuntimeConsumer.AllowTracing = false
 	cfg.Conn.AllowMetrics = false

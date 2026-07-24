@@ -306,10 +306,12 @@ See [Recipe E](recipes.md#recipe-e--audit--replay).
 ## Pattern 6: Development / local
 
 ```go
-cfg.Stream = libnats.StreamConfig{
+// Prefer: nats stream add DEV_ORDERS --subjects 'orders.>' --storage memory
+// Or bootstrap in labs only:
+_, _ = client.Streams().CreateOrUpdateStream(ctx, libnats.StreamConfig{
     Name: "DEV_ORDERS", Subjects: []string{"orders.>"},
     Replicas: 1, Storage: libnats.MemoryStorage,
-}
+})
 
 cfg.RuntimeConsumer.WorkerPoolEnabled = true
 cfg.RuntimeConsumer.WorkerPoolSize    = 2
@@ -323,7 +325,7 @@ cfg.RuntimeConsumer.AllowMetrics = false
 cfg.Conn.AllowReconnect = false // wires NoReconnect()
 ```
 
-Or use `libnats.DevConfig()` which applies the same reconnect/metrics defaults.
+Or use `libnats.DevConfig()` which applies the same reconnect/metrics defaults (`NewClient` still does not create streams).
 
 ### Production connection knobs (inherited from `DefaultConfig`)
 

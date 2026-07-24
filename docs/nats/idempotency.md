@@ -14,7 +14,7 @@ Flow overview: [How JetStream works](README.md#end-to-end-publish-flow).
 Set `DuplicateWindow` on the stream and publish with a stable message ID:
 
 ```go
-cfg.Stream.DuplicateWindow = 2 * time.Minute
+// On the stream (CLI or CreateOrUpdateStream): DuplicateWindow: 2 * time.Minute
 
 client.Publisher().PublishWithMsgID(ctx, "payments.transfer.settled", "pay-"+transferID,
     libnats.Message{Data: payload, MessageType: libnats.Proto},

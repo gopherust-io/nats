@@ -11,6 +11,8 @@ import (
 type Client interface {
 	Consumer() Consumer
 	Publisher() Publisher
+	Requester() Requester
+	Responder() Responder
 	Connector() Connector
 	Streams() StreamManager
 	Consumers() ConsumerManager
@@ -94,6 +96,8 @@ func NewClient(ctx context.Context, cfg *Config) (Client, error) {
 	cl.replay = newReplay(cl.streams, cl.consumers)
 	cl.publisher = newPublisher(ctx, cfg.PublisherConfig, js, nc, cfg.Conn.ReconnectBufSize, cl.metrics, metricsCfg.AllowTracing)
 	cl.consumer = newConsumer(ctx, cfg.RuntimeConsumer, cfg.Backpressure, js, cl.metrics, metricsCfg.AllowTracing)
+	cl.requester = newRequester(cfg.RequesterConfig, nc, cl.metrics, metricsCfg.AllowTracing)
+	cl.responder = newResponder(cfg.ResponderConfig, nc, cl.metrics, metricsCfg.AllowTracing)
 
 	if cfg.Conn.HealthCheckInterval > 0 {
 		cl.startHealthCheck()
@@ -107,19 +111,13 @@ func NewClient(ctx context.Context, cfg *Config) (Client, error) {
 		}
 	}
 
-	if cfg.Stream.Name != "" {
-		if _, err := cl.streams.CreateOrUpdateStream(ctx, cfg.Stream); err != nil {
-			_ = cl.Shutdown()
-
-			return nil, fmt.Errorf("ensure stream: %w", err)
-		}
-	}
-
 	return cl, nil
 }
 
 func (c *client) Consumer() Consumer         { return c.consumer }
 func (c *client) Publisher() Publisher       { return c.publisher }
+func (c *client) Requester() Requester       { return c.requester }
+func (c *client) Responder() Responder       { return c.responder }
 func (c *client) Connector() Connector       { return c }
 func (c *client) Streams() StreamManager     { return c.streams }
 func (c *client) Consumers() ConsumerManager { return c.consumers }

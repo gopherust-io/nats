@@ -8,6 +8,8 @@ Quick lookup for SDK ergonomics beyond core `Client` methods.
 
 | Method | Description |
 |--------|-------------|
+| `Publisher()` / `Consumer()` | JetStream publish / consume |
+| `Requester()` / `Responder()` | Core NATS request/reply |
 | `SetupWorker(ctx, setup, handler)` | Create stream + durable + queue subscribe in one call |
 | `KV()` | JetStream Key-Value bucket manager |
 
@@ -119,6 +121,24 @@ Optional: `TLS` (`ConnectionTLS`), `DontRandomize`, `CustomReconnectDelay`, auth
 `Message.WithExpectedStream` / `WithExpectedLastSeq` / `WithExpectedLastSeqPerSubject` / `WithExpectedLastMsgID` set optimistic concurrency PubOpts. `StreamConfig.Mirror` / `Sources` configure mirror/source streams. `SetupWorker` applies only `Consumer.Durable` from `DurableConsumerConfig` (push bind creates the durable).
 
 `PublisherConfig.SkipSubjectValidation` skips per-publish subject tokenization for trusted static subjects. `PublisherConfig.MaxAsyncPending` caps in-flight async publishes (default 1024, `-1` unlimited). Call `PublishAsyncComplete(ctx)` after a burst to drain pending acks.
+
+## Requester / Responder (core NATS request-reply)
+
+Not JetStream. Uses `nats.Conn.RequestMsgWithContext` and core `Subscribe` / `QueueSubscribe` (no auto Ack/Nak).
+
+| API | Description |
+|-----|-------------|
+| `Requester().RequestBytes` | Raw request, returns `*nats.Msg` |
+| `Requester().RequestMessage` | Encode `Message` (any codec) and request |
+| `Requester().RequestJSON` / `RequestJSONInto` | JSON request; `Into` decodes reply |
+| `Requester().RequestMsgPack` / `RequestMsgPackInto` | MessagePack |
+| `Requester().RequestProto` / `RequestProtoInto` | Protobuf (`proto.Message`) |
+| `Responder().Subscribe` / `QueueSubscribe` | Core reply handlers |
+| `RespondBytes` / `RespondJSON` / `RespondMsgPack` / `RespondProto` | Reply helpers |
+
+`RequesterConfig.Timeout` applies when `ctx` has no deadline (default 2s). `AllowMetrics` / `AllowTracing` mirror publisher flags. Spans: `nats.request`, `nats.reply`.
+
+Do not use request/reply on subjects captured by a JetStream stream: the PubAck is written to the reply inbox and will be mistaken for the application response.
 
 Pull `Process` options: `WithProcessConcurrency(n)` runs a fixed worker set of size `n` per fetched batch (no per-message goroutine spawn).
 

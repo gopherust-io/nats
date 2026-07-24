@@ -33,6 +33,14 @@ type clientMetrics struct {
 	publishLatency *tel.FastHistogram
 	publishBytes   *tel.FastHistogram
 
+	requestTotal   *tel.FastCounter
+	requestErrors  *tel.FastCounter
+	requestLatency *tel.FastHistogram
+	requestBytes   *tel.FastHistogram
+
+	replyHandled *tel.FastCounter
+	replyErrors  *tel.FastCounter
+
 	messagesReceived     *tel.FastCounter
 	messagesErrors       *tel.FastCounter
 	handlingTime         *tel.FastHistogram
@@ -210,6 +218,48 @@ func newClientMetrics(ctx context.Context, cfg MetricsConfig) *clientMetrics {
 		var err error
 
 		cm.publishBytes, err = registry.Histogram(prefix + "/publish_bytes")
+
+		return err
+	})
+	must(prefix+"/request_total", func() error {
+		var err error
+
+		cm.requestTotal, err = registry.Counter(prefix + "/request_total")
+
+		return err
+	})
+	must(prefix+"/request_errors", func() error {
+		var err error
+
+		cm.requestErrors, err = registry.Counter(prefix + "/request_errors")
+
+		return err
+	})
+	must(prefix+"/request_latency_seconds", func() error {
+		var err error
+
+		cm.requestLatency, err = registry.Histogram(prefix + "/request_latency_seconds")
+
+		return err
+	})
+	must(prefix+"/request_bytes", func() error {
+		var err error
+
+		cm.requestBytes, err = registry.Histogram(prefix + "/request_bytes")
+
+		return err
+	})
+	must(prefix+"/reply_handled", func() error {
+		var err error
+
+		cm.replyHandled, err = registry.Counter(prefix + "/reply_handled")
+
+		return err
+	})
+	must(prefix+"/reply_errors", func() error {
+		var err error
+
+		cm.replyErrors, err = registry.Counter(prefix + "/reply_errors")
 
 		return err
 	})

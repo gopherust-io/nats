@@ -620,6 +620,8 @@ type client struct {
 	config    *Config
 	publisher *publisher
 	consumer  *consumer
+	requester *requester
+	responder *responder
 	conn      *natspkg.Conn
 	metrics   *clientMetrics
 	collector *metricsCollector

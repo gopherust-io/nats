@@ -116,6 +116,10 @@ func disableTelemetry(cfg *Config) {
 	cfg.RuntimeConsumer.AllowTracing = false
 	cfg.PublisherConfig.AllowMetrics = false
 	cfg.PublisherConfig.AllowTracing = false
+	cfg.RequesterConfig.AllowMetrics = false
+	cfg.RequesterConfig.AllowTracing = false
+	cfg.ResponderConfig.AllowMetrics = false
+	cfg.ResponderConfig.AllowTracing = false
 	cfg.Backpressure.PendingMsgLimit = 0
 	cfg.Backpressure.PendingMsgBuffer = 0
 	cfg.Backpressure.MaxAckPending = 0
@@ -173,6 +177,8 @@ func testClientWithTracing(t *testing.T) (Client, context.Context, *tracetest.Sp
 	disableTelemetry(&cfg)
 	cfg.Metrics.AllowTracing = true
 	cfg.PublisherConfig.AllowTracing = true
+	cfg.RequesterConfig.AllowTracing = true
+	cfg.ResponderConfig.AllowTracing = true
 	cfg.RuntimeConsumer.AllowTracing = true
 	client, err := NewClient(ctx, &cfg)
 	require.NoError(t, err)
