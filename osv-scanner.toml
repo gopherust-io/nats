@@ -1,0 +1,8 @@
+# Ignore OSV findings that Scorecard reports for transitive modules we do not
+# exercise. Prefer fixing reachable issues via dependency bumps instead.
+#
+# https://google.github.io/osv-scanner/configuration/
+
+[[IgnoredVulns]]
+id = "GO-2026-5932"
+reason = "Transitive golang.org/x/crypto only; this module does not import golang.org/x/crypto/openpgp"
