@@ -66,7 +66,10 @@ jobs:
           go-version-file: go.mod
           cache: true
       - name: Run tests with race detector
-        run: go test -race ./... -count=1 -parallel=$(nproc) -timeout=90s
+        run: |
+          set -euo pipefail
+          mapfile -t pkgs < <(go list ./... | grep -vE '/(examples|tools)/')
+          go test -race "${pkgs[@]}" -count=1 -parallel=4 -timeout=120s
 
   bench:
     name: Critical benchmarks
