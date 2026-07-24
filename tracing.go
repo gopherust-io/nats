@@ -43,13 +43,14 @@ func startPublishSpan(ctx context.Context, subject string, allowTracing bool) (c
 
 	telem := tel.FromCtx(ctx)
 
-	return telem.StartSpan(ctx, "nats.publish",
-		trace.WithAttributes(
-			tel.MessagingSystem(),
-			tel.MessagingOperationPublish(),
-			tel.MessagingSubject(subject),
-		),
-	)
+	// Stack-backed attrs avoid a heap []attribute.KeyValue per publish.
+	attrs := [...]attribute.KeyValue{
+		tel.MessagingSystem(),
+		tel.MessagingOperationPublish(),
+		tel.MessagingSubject(subject),
+	}
+
+	return telem.StartSpan(ctx, "nats.publish", trace.WithAttributes(attrs[:]...))
 }
 
 func injectTraceContext(ctx context.Context, msg *Message) {
@@ -65,11 +66,25 @@ func injectTraceContext(ctx context.Context, msg *Message) {
 		if headers == nil {
 			headers = make(map[string][]string, 1)
 		}
-
-		headers[HeaderTraceID] = []string{sc.TraceID().String()}
+		setHeaderValue(headers, HeaderTraceID, sc.TraceID().String())
 	}
 
 	msg.Header = headers
+}
+
+func setHeaderValue(h map[string][]string, key, value string) {
+	if vals := h[key]; len(vals) == 1 {
+		vals[0] = value
+
+		return
+	}
+	if vals := h[key]; cap(vals) >= 1 {
+		h[key] = append(vals[:0], value)
+
+		return
+	}
+
+	h[key] = []string{value}
 }
 
 // TraceIDFromHeader returns the explicit Trace-Id header value, if present.
@@ -118,19 +133,19 @@ func startProcessSpan(ctx context.Context, msg *natspkg.Msg, allowTracing bool, 
 		subject = msg.Subject
 	}
 
-	attrs := []attribute.KeyValue{
-		tel.MessagingSystem(),
-		tel.MessagingOperationProcess(),
-		tel.MessagingSubject(subject),
-	}
+	// Stack buffer sized for base attrs + optional JetStream metadata.
+	var attrs [5]attribute.KeyValue
+	attrs[0] = tel.MessagingSystem()
+	attrs[1] = tel.MessagingOperationProcess()
+	attrs[2] = tel.MessagingSubject(subject)
+	n := 3
 	if meta != nil {
-		attrs = append(attrs,
-			attribute.Int64("messaging.nats.stream_sequence", int64(meta.Sequence.Stream)),
-			attribute.Int64("messaging.nats.delivery_count", int64(meta.NumDelivered)),
-		)
+		attrs[3] = attribute.Int64("messaging.nats.stream_sequence", int64(meta.Sequence.Stream))
+		attrs[4] = attribute.Int64("messaging.nats.delivery_count", int64(meta.NumDelivered))
+		n = 5
 	}
 
-	return telem.StartSpan(ctx, "nats.process", trace.WithAttributes(attrs...))
+	return telem.StartSpan(ctx, "nats.process", trace.WithAttributes(attrs[:n]...))
 }
 
 func endSpan(span trace.Span, err error) {
