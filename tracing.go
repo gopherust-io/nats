@@ -72,19 +72,19 @@ func injectTraceContext(ctx context.Context, msg *Message) {
 	msg.Header = headers
 }
 
-func setHeaderValue(h map[string][]string, key, value string) {
-	if vals := h[key]; len(vals) == 1 {
+func setHeaderValue(headers map[string][]string, key, value string) {
+	if vals := headers[key]; len(vals) == 1 {
 		vals[0] = value
 
 		return
 	}
-	if vals := h[key]; cap(vals) >= 1 {
-		h[key] = append(vals[:0], value)
+	if vals := headers[key]; cap(vals) >= 1 {
+		headers[key] = append(vals[:0], value)
 
 		return
 	}
 
-	h[key] = []string{value}
+	headers[key] = []string{value}
 }
 
 // TraceIDFromHeader returns the explicit Trace-Id header value, if present.
