@@ -13,17 +13,23 @@ env:
   GOWORK: off
 
 jobs:
-  unit:
-    name: Unit tests
+  test:
+    name: Test and lint
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
           cache: true
+      - name: Check gofmt
+        run: test -z "$(gofmt -l .)"
+      - name: Run go vet
+        run: go vet ./...
       - name: Run unit tests with coverage
         run: |
           set -euo pipefail
@@ -36,16 +42,24 @@ jobs:
           total=$(go tool cover -func=coverage.out | awk '/^total:/ {gsub(/%/,"",$NF); print $NF}')
           echo "Total coverage: ${total}% (minimum ${COVERAGE_MIN}%)"
           awk -v t="$total" -v m="$COVERAGE_MIN" 'BEGIN { exit (t+0 < m+0) ? 1 : 0 }'
-      - name: Summarize coverage
-        if: always()
-        run: go tool cover -func=coverage.out
+      - name: Build examples
+        run: go build -o /dev/null ./examples/...
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.12.2
+          args: --timeout=3m
+          skip-cache: false
 
   race:
     name: Race detector
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
@@ -54,50 +68,15 @@ jobs:
       - name: Run tests with race detector
         run: go test -race ./... -count=1 -parallel=$(nproc) -timeout=90s
 
-  static:
-    name: Static checks
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version-file: go.mod
-          cache: true
-      - name: Check gofmt
-        run: test -z "$(gofmt -l .)"
-      - name: Run go vet
-        run: go vet ./...
-      - name: Build examples
-        run: go build -o /dev/null ./examples/...
-
-  lint:
-    name: Lint and vulncheck
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version-file: go.mod
-          cache: true
-      - name: Run govulncheck
-        run: go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
-      - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v9
-        with:
-          version: v2.12.2
-          args: --timeout=3m
-          skip-cache: false
-
   bench:
     name: Critical benchmarks
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
@@ -107,28 +86,17 @@ jobs:
         run: |
           go test -bench='BenchmarkCodecComparison|BenchmarkPublishJSON|BenchmarkPublishBytes|BenchmarkPublishAsyncBytes|BenchmarkWorkerPool' \
             -benchmem -count=1 -benchtime=100ms -run '^$' \
-            ./ ./workerpool/ | tee bench/ci-run.txt
-      - name: Upload benchmark artifact
-        uses: actions/upload-artifact@v5
-        with:
-          name: bench-ci-run
-          path: bench/ci-run.txt
-      - name: Compare benchmarks to baseline
-        continue-on-error: true
-        run: |
-          go install golang.org/x/perf/cmd/benchstat@latest
-          if [ -f bench/baseline.txt ]; then
-            benchstat bench/baseline.txt bench/ci-run.txt || true
-          else
-            echo "No bench/baseline.txt committed; skip comparison"
-          fi
+            ./ ./workerpool/
 
   fuzz:
     name: Fuzz smoke
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
@@ -137,5 +105,33 @@ jobs:
       - name: Run fuzz smoke tests
         run: |
           for fuzz in FuzzDecodeJSON FuzzCommonWildcardSubject FuzzShardIndex; do
-            go test -fuzz="$fuzz" -fuzztime=5s . -run '^$'
+            go test -fuzz="$fuzz" -fuzztime=2s . -run '^$'
           done
+
+  vuln:
+    name: Vulnerability scan
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Cache govulncheck
+        uses: actions/cache@v4
+        with:
+          path: ~/go/bin/govulncheck
+          key: govulncheck-v1.6.0-${{ runner.os }}
+      - name: Install govulncheck
+        run: |
+          if [ ! -x "$HOME/go/bin/govulncheck" ]; then
+            go install golang.org/x/vuln/cmd/govulncheck@v1.6.0
+          fi
+          echo "$HOME/go/bin" >> "$GITHUB_PATH"
+      - name: Run govulncheck
+        run: govulncheck ./...

@@ -32,6 +32,8 @@ make nats-down-all
 3. Update docs when changing public APIs or presets (`docs/nats/`, root `README.md`, `CHANGELOG.md`).
 4. Do not commit secrets; auth lab passwords are local-only plaintext by design.
 
+CI on PRs runs format, vet, unit tests, examples build, and golangci-lint. Race, fuzz, benchmarks, and govulncheck run on pushes to `main`.
+
 ## Compatibility
 
 See [docs/compatibility.md](docs/compatibility.md).
