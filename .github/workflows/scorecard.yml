@@ -8,8 +8,10 @@ on:
     - cron: "43 6 * * 1"
   workflow_dispatch:
 
+# Include event_name so push / branch_protection_rule / schedule do not cancel each other
+# (that left cancelled Scorecard checks on the commit SHA).
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
