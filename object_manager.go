@@ -3,6 +3,7 @@ package nats
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"time"
@@ -175,6 +176,10 @@ func (m *objectStoreManager) ListObjects(_ context.Context, bucket string, offse
 	}
 
 	infos, err := os.List()
+	if errors.Is(err, natspkg.ErrNoObjectsFound) {
+		page, total := pageSlice([]string{}, offset, limit)
+		return page, total, nil
+	}
 	if err != nil {
 		return nil, 0, fmt.Errorf("list objects bucket=%q: %w", bucket, err)
 	}

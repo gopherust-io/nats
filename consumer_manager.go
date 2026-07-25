@@ -2,6 +2,7 @@ package nats
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"time"
@@ -57,15 +58,17 @@ func toNatsConsumerConfig(cfg DurableConsumerConfig) *natspkg.ConsumerConfig {
 		OptStartSeq:       cfg.OptStartSeq,
 		OptStartTime:      cfg.OptStartTime,
 	}
-	if cfg.DeliverPolicy != 0 {
+
+	// DeliverAll is zero; only copy when explicitly set so updates can omit it.
+	if cfg.HasDeliverPolicy {
 		cc.DeliverPolicy = cfg.DeliverPolicy
 	}
 
-	if cc.AckPolicy == 0 {
+	if !cfg.HasAckPolicy && cc.AckPolicy == 0 {
 		cc.AckPolicy = AckExplicit
 	}
 
-	if cc.ReplayPolicy == 0 {
+	if !cfg.HasReplayPolicy && cc.ReplayPolicy == 0 {
 		cc.ReplayPolicy = ReplayInstant
 	}
 
@@ -107,7 +110,12 @@ func (m *consumerManager) CreateOrUpdateConsumer(
 		return nil, fmt.Errorf("create consumer stream=%q durable=%q: %w", stream, cfg.Durable, err)
 	}
 
-	if cc.DeliverPolicy != 0 && existing.Config.DeliverPolicy != cc.DeliverPolicy {
+	// Omitted deliver policy keeps the existing value (DeliverAll is a valid zero).
+	if !cfg.HasDeliverPolicy {
+		cc.DeliverPolicy = existing.Config.DeliverPolicy
+	}
+
+	if existing.Config.DeliverPolicy != cc.DeliverPolicy {
 		return nil, fmt.Errorf(
 			"create or update consumer stream=%q durable=%q: deliver policy %v -> %v: %w",
 			stream, cfg.Durable, existing.Config.DeliverPolicy, cc.DeliverPolicy, ErrConsumerRecreateRequired)
@@ -229,17 +237,15 @@ func (m *consumerManager) ListConsumersPage(ctx context.Context, stream string, 
 	}
 
 	total := len(names)
-	if limit < 0 {
-		limit = total
-		offset = 0
-	}
-
 	pageNames, _ := pageSlice(names, offset, limit)
 	infos := make([]*natspkg.ConsumerInfo, 0, len(pageNames))
 
 	for _, name := range pageNames {
 		info, infoErr := m.js.ConsumerInfo(stream, name)
 		if infoErr != nil {
+			if errors.Is(infoErr, natspkg.ErrConsumerNotFound) {
+				continue
+			}
 			return nil, total, fmt.Errorf("list consumers stream=%q name=%q: %w", stream, name, infoErr)
 		}
 

@@ -602,27 +602,27 @@ func (c *metricsCollector) collectStream(ctx context.Context, name string) *nats
 	}
 
 	if c.metrics.streamMessages != nil {
-		c.metrics.streamMessages.Record(ctx, int64(info.State.Msgs))
+		c.metrics.streamMessages.RecordWith(ctx, int64(info.State.Msgs), name)
 	}
 
 	if c.metrics.streamBytes != nil {
-		c.metrics.streamBytes.Record(ctx, int64(info.State.Bytes))
+		c.metrics.streamBytes.RecordWith(ctx, int64(info.State.Bytes), name)
 	}
 
 	if c.metrics.streamFirstSeq != nil {
-		c.metrics.streamFirstSeq.Record(ctx, int64(info.State.FirstSeq))
+		c.metrics.streamFirstSeq.RecordWith(ctx, int64(info.State.FirstSeq), name)
 	}
 
 	if c.metrics.streamLastSeq != nil {
-		c.metrics.streamLastSeq.Record(ctx, int64(info.State.LastSeq))
+		c.metrics.streamLastSeq.RecordWith(ctx, int64(info.State.LastSeq), name)
 	}
 
 	if c.metrics.streamConsumerCount != nil {
-		c.metrics.streamConsumerCount.Record(ctx, int64(info.State.Consumers))
+		c.metrics.streamConsumerCount.RecordWith(ctx, int64(info.State.Consumers), name)
 	}
 
 	if c.metrics.streamReplicaCount != nil && info.Cluster != nil {
-		c.metrics.streamReplicaCount.Record(ctx, int64(len(info.Cluster.Replicas)+1))
+		c.metrics.streamReplicaCount.RecordWith(ctx, int64(len(info.Cluster.Replicas)+1), name)
 	}
 
 	return info
@@ -634,20 +634,22 @@ func (c *metricsCollector) collectConsumer(ctx context.Context, stream, durable 
 		return
 	}
 
+	label := stream + "." + durable
+
 	if c.metrics.consumerNumPending != nil {
-		c.metrics.consumerNumPending.Record(ctx, int64(info.NumPending))
+		c.metrics.consumerNumPending.RecordWith(ctx, int64(info.NumPending), label)
 	}
 
 	if c.metrics.consumerNumAckPending != nil {
-		c.metrics.consumerNumAckPending.Record(ctx, int64(info.NumAckPending))
+		c.metrics.consumerNumAckPending.RecordWith(ctx, int64(info.NumAckPending), label)
 	}
 
 	if c.metrics.consumerNumRedelivered != nil {
-		c.metrics.consumerNumRedelivered.Record(ctx, int64(info.NumRedelivered))
+		c.metrics.consumerNumRedelivered.RecordWith(ctx, int64(info.NumRedelivered), label)
 	}
 
 	if c.metrics.consumerAckFloor != nil {
-		c.metrics.consumerAckFloor.Record(ctx, int64(info.AckFloor.Stream))
+		c.metrics.consumerAckFloor.RecordWith(ctx, int64(info.AckFloor.Stream), label)
 	}
 
 	if c.metrics.consumerLag != nil {
@@ -660,7 +662,7 @@ func (c *metricsCollector) collectConsumer(ctx context.Context, stream, durable 
 			}
 		}
 		lag := max(int64(streamInfo.State.LastSeq)-int64(info.Delivered.Stream), 0)
-		c.metrics.consumerLag.Record(ctx, lag)
+		c.metrics.consumerLag.RecordWith(ctx, lag, label)
 	}
 }
 

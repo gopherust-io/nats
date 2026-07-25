@@ -178,6 +178,24 @@ func TestObjectStoreManagerCRUD(t *testing.T) {
 	require.NoError(t, client.Objects().DeleteObject(ctx, bucket, "file.txt"))
 }
 
+func TestListObjectsEmptyBucket(t *testing.T) {
+	t.Parallel()
+	client, ctx := testClient(t)
+	bucket := uniqueName(t, "objempty")
+
+	_, err := client.Objects().Create(ctx, ObjectStoreConfig{
+		Bucket:  bucket,
+		Storage: MemoryStorage,
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = client.Objects().Delete(context.Background(), bucket) })
+
+	names, total, err := client.Objects().ListObjects(ctx, bucket, 0, -1)
+	require.NoError(t, err)
+	assert.Equal(t, 0, total)
+	assert.Empty(t, names)
+}
+
 func TestPublishRaw(t *testing.T) {
 	t.Parallel()
 	client, ctx := testClient(t)
