@@ -246,6 +246,7 @@ func (m *consumerManager) ListConsumersPage(ctx context.Context, stream string, 
 			if errors.Is(infoErr, natspkg.ErrConsumerNotFound) {
 				continue
 			}
+
 			return nil, total, fmt.Errorf("list consumers stream=%q name=%q: %w", stream, name, infoErr)
 		}
 
