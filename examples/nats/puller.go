@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"time"
 
 	natspkg "github.com/nats-io/nats.go"
+	"github.com/rs/zerolog"
 
 	libnats "github.com/gopherust-io/nats"
 	"github.com/gopherust-io/tel"
@@ -25,10 +25,11 @@ func runPuller(ctx context.Context, client libnats.Client, telem *tel.Telemetry)
 			return fmt.Errorf("decode: %w", err)
 		}
 
-		slog.Info("puller processed order",
-			"order_id", ev.ID,
-			"subject", msg.Subject,
-			"msg_id", msg.Header.Get(libnats.HeaderMsgID))
+		zerolog.Ctx(msgCtx).Info().
+			Int("order_id", ev.ID).
+			Str("subject", msg.Subject).
+			Str("msg_id", msg.Header.Get(libnats.HeaderMsgID)).
+			Msg("puller processed order")
 		processed.Add(msgCtx, 1)
 
 		return nil
@@ -39,10 +40,11 @@ func runPuller(ctx context.Context, client libnats.Client, telem *tel.Telemetry)
 		return fmt.Errorf("pull consumer: %w", err)
 	}
 
-	slog.Info("puller started",
-		"stream", streamName,
-		"durable", pullDurableName,
-		"fetch_batch", pullFetchBatch)
+	zerolog.Ctx(ctx).Info().
+		Str("stream", streamName).
+		Str("durable", pullDurableName).
+		Int("fetch_batch", pullFetchBatch).
+		Msg("puller started")
 
 	return pull.Process(ctx, handler,
 		libnats.WithFetchBatch(pullFetchBatch),

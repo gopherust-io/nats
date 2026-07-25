@@ -6,13 +6,13 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
-	"log/slog"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	natspkg "github.com/nats-io/nats.go"
 	"github.com/nats-io/nkeys"
+	"github.com/rs/zerolog"
 )
 
 type Connector interface {
@@ -68,10 +68,11 @@ func (c *client) connectWithRetry(ctx context.Context) (*natspkg.Conn, error) {
 		}
 
 		lastErr = err
-		slog.WarnContext(ctx, "failed to connect to NATS",
-			slog.String("address", redactURLString(c.config.Conn.Address)),
-			slog.Int("attempt", i+1),
-			slog.String("err", err.Error()))
+		zerolog.Ctx(ctx).Warn().
+			Str("address", redactURLString(c.config.Conn.Address)).
+			Int("attempt", i+1).
+			Err(err).
+			Msg("failed to connect to NATS")
 
 		if i < attempts-1 {
 			select {
@@ -314,7 +315,7 @@ func (c *client) onConnect(_ *natspkg.Conn) {
 	c.inLameDuck = false
 	c.mu.Unlock()
 
-	slog.InfoContext(c.ctx, "NATS connected")
+	zerolog.Ctx(c.ctx).Info().Msg("NATS connected")
 
 	if c.metrics != nil && c.metrics.connectionState != nil {
 		c.metrics.connectionState.Record(c.ctx, 1)
@@ -328,9 +329,9 @@ func (c *client) onDisconnect(nc *natspkg.Conn, err error) {
 	c.mu.Unlock()
 
 	if err != nil {
-		slog.ErrorContext(c.ctx, "NATS disconnected", slog.String("err", err.Error()))
+		zerolog.Ctx(c.ctx).Error().Err(err).Msg("NATS disconnected")
 	} else {
-		slog.WarnContext(c.ctx, "NATS disconnected")
+		zerolog.Ctx(c.ctx).Warn().Msg("NATS disconnected")
 	}
 
 	if c.metrics != nil && c.metrics.connectionState != nil {
@@ -349,7 +350,7 @@ func (c *client) onReconnect(nc *natspkg.Conn) {
 	c.inLameDuck = false
 	c.mu.Unlock()
 
-	slog.InfoContext(c.ctx, "NATS reconnected")
+	zerolog.Ctx(c.ctx).Info().Msg("NATS reconnected")
 
 	if c.metrics != nil && c.metrics.connectionState != nil {
 		c.metrics.connectionState.Record(c.ctx, 1)
@@ -370,7 +371,7 @@ func (c *client) onReconnectErr(_ *natspkg.Conn, err error) {
 		c.lastError = err
 		c.mu.Unlock()
 
-		slog.ErrorContext(c.ctx, "NATS reconnect error", slog.String("err", err.Error()))
+		zerolog.Ctx(c.ctx).Error().Err(err).Msg("NATS reconnect error")
 	}
 }
 
@@ -386,7 +387,7 @@ func (c *client) onClosed(nc *natspkg.Conn) {
 	c.inLameDuck = false
 	c.mu.Unlock()
 
-	slog.InfoContext(c.ctx, "NATS connection closed")
+	zerolog.Ctx(c.ctx).Info().Msg("NATS connection closed")
 
 	if c.metrics != nil && c.metrics.connectionState != nil {
 		c.metrics.connectionState.Record(c.ctx, 0)
@@ -406,7 +407,7 @@ func (c *client) onError(_ *natspkg.Conn, _ *natspkg.Subscription, err error) {
 	c.lastError = err
 	c.mu.Unlock()
 
-	slog.ErrorContext(c.ctx, "NATS async error", slog.String("err", err.Error()))
+	zerolog.Ctx(c.ctx).Error().Err(err).Msg("NATS async error")
 
 	if c.metrics != nil && c.metrics.connectionErrors != nil {
 		c.metrics.connectionErrors.Add(c.ctx, 1)
@@ -423,7 +424,7 @@ func (c *client) onLameDuck(_ *natspkg.Conn) {
 	c.inLameDuck = true
 	c.mu.Unlock()
 
-	slog.WarnContext(c.ctx, "NATS server entered lame duck mode; drain or fail over before hard close")
+	zerolog.Ctx(c.ctx).Warn().Msg("NATS server entered lame duck mode; drain or fail over before hard close")
 
 	if c.metrics != nil && c.metrics.lameDuckEvents != nil {
 		c.metrics.lameDuckEvents.Add(c.ctx, 1)
@@ -559,7 +560,7 @@ func (c *client) startHealthCheck() {
 			case <-c.healthCheck.C:
 				err := c.HealthCheck(c.ctx)
 				if err != nil {
-					slog.WarnContext(c.ctx, "health check failed", slog.String("err", err.Error()))
+					zerolog.Ctx(c.ctx).Warn().Err(err).Msg("health check failed")
 				}
 			}
 		}
@@ -646,8 +647,9 @@ func (c *client) drainAndClose() error {
 		// Drain already closed the connection on success.
 		return nil
 	case <-ctx.Done():
-		slog.WarnContext(c.ctx, "drain timeout, forcing close",
-			slog.Duration("timeout", timeout))
+		zerolog.Ctx(c.ctx).Warn().
+			Dur("timeout", timeout).
+			Msg("drain timeout, forcing close")
 		nc.Close()
 
 		return fmt.Errorf("%w after %s: %w", ErrDrainTimeout, timeout, ctx.Err())

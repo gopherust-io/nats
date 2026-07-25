@@ -4,9 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"io"
-	"log/slog"
 	"sync"
 	"time"
+
+	"github.com/rs/zerolog"
 )
 
 const (
@@ -142,17 +143,18 @@ func (r *FlightRecorder) LogSnapshot(ctx context.Context, msg string) {
 	}
 
 	snap := r.Snapshot()
-	slog.WarnContext(ctx, msg, slog.Int("incident_count", len(snap)))
+	zerolog.Ctx(ctx).Warn().Int("incident_count", len(snap)).Msg(msg)
 	for _, ev := range snap {
-		slog.WarnContext(ctx, "flight_recorder_incident",
-			slog.Time("time", ev.Time),
-			slog.Int("kind", int(ev.Kind)),
-			slog.String("detail", ev.Detail),
-			slog.String("subject", ev.Subject),
-			slog.String("reason", ev.Reason),
-			slog.Uint64("num_pending", ev.NumPending),
-			slog.Int("attempt", ev.Attempt),
-			slog.String("err", ev.Err))
+		zerolog.Ctx(ctx).Warn().
+			Time("time", ev.Time).
+			Int("kind", int(ev.Kind)).
+			Str("detail", ev.Detail).
+			Str("subject", ev.Subject).
+			Str("reason", ev.Reason).
+			Uint64("num_pending", ev.NumPending).
+			Int("attempt", ev.Attempt).
+			Str("err", ev.Err).
+			Msg("flight_recorder_incident")
 	}
 }
 

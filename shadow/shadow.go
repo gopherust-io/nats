@@ -3,11 +3,26 @@ package shadow
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"math/rand/v2"
+	"os"
 
 	natspkg "github.com/nats-io/nats.go"
+	"github.com/rs/zerolog"
 )
+
+func ensureDefaultLogger() {
+	if zerolog.DefaultContextLogger != nil {
+		return
+	}
+	l := zerolog.New(os.Stdout).With().Timestamp().Logger()
+	zerolog.DefaultContextLogger = &l
+}
+
+var _ = func() int {
+	ensureDefaultLogger()
+
+	return 0
+}()
 
 // Handler is a message handler (same signature as nats.MsgHandler).
 type Handler func(ctx context.Context, msg *natspkg.Msg) error
@@ -103,7 +118,7 @@ func run(ctx context.Context, shadow Handler, msg *natspkg.Msg) (err error) {
 	defer func() {
 		if rec := recover(); rec != nil {
 			err = fmt.Errorf("shadow panic: %v", rec)
-			slog.ErrorContext(ctx, "shadow handler panic", slog.Any("panic", rec))
+			zerolog.Ctx(ctx).Error().Any("panic", rec).Msg("shadow handler panic")
 		}
 	}()
 

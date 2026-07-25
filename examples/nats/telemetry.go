@@ -2,10 +2,10 @@ package main
 
 import (
 	"context"
-	"log/slog"
 	"os"
 
 	"github.com/gopherust-io/tel"
+	"github.com/rs/zerolog"
 )
 
 func mustTelemetry(ctx context.Context) *tel.Telemetry {
@@ -27,14 +27,15 @@ func mustTelemetry(ctx context.Context) *tel.Telemetry {
 	tel.SetGlobal(telem)
 
 	if err := telem.Start(ctx); err != nil {
-		slog.Error("telemetry start", "err", err)
+		zerolog.Ctx(ctx).Error().Err(err).Msg("telemetry start")
 		os.Exit(1)
 	}
 
-	slog.Info("telemetry ready",
-		"service", cfg.Service,
-		"otlp_enabled", cfg.TelConfig.Enable,
-		"otlp_addr", cfg.TelConfig.Address)
+	zerolog.Ctx(ctx).Info().
+		Str("service", cfg.Service).
+		Bool("otlp_enabled", cfg.TelConfig.Enable).
+		Str("otlp_addr", cfg.TelConfig.Address).
+		Msg("telemetry ready")
 
 	return telem
 }

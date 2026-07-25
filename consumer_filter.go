@@ -1,10 +1,11 @@
 package nats
 
 import (
-	"log/slog"
+	"context"
 	"strings"
 
 	natspkg "github.com/nats-io/nats.go"
+	"github.com/rs/zerolog"
 )
 
 // consumerFilterSubject resolves the pull-subscribe subject from consumer config.
@@ -28,10 +29,10 @@ func consumerFilterSubjects(subjects []string) string {
 			return wild
 		}
 
-		slog.Warn("pull consumer filter subjects share no common prefix; using first filter only",
-			slog.Any("filter_subjects", subjects),
-			slog.String("selected", subjects[0]),
-		)
+		zerolog.Ctx(context.Background()).Warn().
+			Any("filter_subjects", subjects).
+			Str("selected", subjects[0]).
+			Msg("pull consumer filter subjects share no common prefix; using first filter only")
 
 		return subjects[0]
 	}

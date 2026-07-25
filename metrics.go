@@ -2,11 +2,11 @@ package nats
 
 import (
 	"context"
-	"log/slog"
 	"sync"
 	"time"
 
 	natspkg "github.com/nats-io/nats.go"
+	"github.com/rs/zerolog"
 
 	"github.com/gopherust-io/tel"
 )
@@ -97,7 +97,7 @@ func newClientMetrics(ctx context.Context, cfg MetricsConfig) *clientMetrics {
 	must := func(name string, fn func() error) {
 		err := fn()
 		if err != nil {
-			slog.WarnContext(ctx, "failed to create metric", slog.String("name", name), slog.String("err", err.Error()))
+			zerolog.Ctx(ctx).Warn().Str("name", name).Err(err).Msg("failed to create metric")
 		}
 	}
 
