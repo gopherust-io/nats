@@ -47,7 +47,15 @@ func TestHandlePoolBackpressureBlockMode(t *testing.T) {
 		pool.GracefulStop()
 	})
 
+	// Occupy the worker, then fill the buffered queue so depth == capacity.
+	pool.Publish(ctx, &natspkg.Msg{Subject: "busy"}, false, nil)
+	require.Eventually(t, func() bool {
+		return pool.QueueDepth() == 0
+	}, time.Second, time.Millisecond)
 	pool.Publish(ctx, &natspkg.Msg{Subject: "fill"}, false, nil)
+	require.Eventually(t, func() bool {
+		return pool.QueueDepth() >= 1
+	}, time.Second, time.Millisecond)
 
 	c := &consumer{
 		workerPool:   pool,
@@ -71,7 +79,14 @@ func TestHandlePoolBackpressureDropMode(t *testing.T) {
 		pool.GracefulStop()
 	})
 
+	pool.Publish(ctx, &natspkg.Msg{Subject: "busy"}, false, nil)
+	require.Eventually(t, func() bool {
+		return pool.QueueDepth() == 0
+	}, time.Second, time.Millisecond)
 	pool.Publish(ctx, &natspkg.Msg{Subject: "fill"}, false, nil)
+	require.Eventually(t, func() bool {
+		return pool.QueueDepth() >= 1
+	}, time.Second, time.Millisecond)
 
 	c := &consumer{
 		workerPool:   pool,

@@ -27,19 +27,28 @@ func WithFilterSubjects(subjects ...string) ReplayOpt {
 	}
 }
 
-// WithDeliverPolicy sets an explicit deliver policy.
+// WithDeliverPolicy sets an explicit deliver policy (including DeliverAll).
 func WithDeliverPolicy(policy DeliverPolicy) ReplayOpt {
-	return func(c *ReplayConfig) { c.DeliverPolicy = policy }
+	return func(c *ReplayConfig) {
+		c.DeliverPolicy = policy
+		c.deliverSet = true
+	}
 }
 
-// WithReplayPolicy sets Instant vs Original timing replay.
+// WithReplayPolicy sets Instant vs Original timing replay (including ReplayInstant).
 func WithReplayPolicy(policy ReplayPolicy) ReplayOpt {
-	return func(c *ReplayConfig) { c.ReplayPolicy = policy }
+	return func(c *ReplayConfig) {
+		c.ReplayPolicy = policy
+		c.replaySet = true
+	}
 }
 
 // WithStartSeq sets OptStartSeq (does not change DeliverPolicy by itself).
 func WithStartSeq(seq uint64) ReplayOpt {
-	return func(c *ReplayConfig) { c.OptStartSeq = seq }
+	return func(c *ReplayConfig) {
+		c.OptStartSeq = seq
+		c.optStartSeqSet = true
+	}
 }
 
 // WithStartTime sets OptStartTime (does not change DeliverPolicy by itself).
@@ -47,6 +56,7 @@ func WithStartTime(t time.Time) ReplayOpt {
 	return func(c *ReplayConfig) {
 		ts := t
 		c.OptStartTime = &ts
+		c.optStartTimeSet = true
 	}
 }
 
@@ -54,8 +64,11 @@ func WithStartTime(t time.Time) ReplayOpt {
 func FromSeq(seq uint64) ReplayOpt {
 	return func(c *ReplayConfig) {
 		c.DeliverPolicy = DeliverByStartSequence
+		c.deliverSet = true
 		c.OptStartSeq = seq
+		c.optStartSeqSet = true
 		c.OptStartTime = nil
+		c.optStartTimeSet = true
 	}
 }
 
@@ -63,9 +76,12 @@ func FromSeq(seq uint64) ReplayOpt {
 func FromTime(t time.Time) ReplayOpt {
 	return func(c *ReplayConfig) {
 		c.DeliverPolicy = DeliverByStartTime
+		c.deliverSet = true
 		ts := t
 		c.OptStartTime = &ts
+		c.optStartTimeSet = true
 		c.OptStartSeq = 0
+		c.optStartSeqSet = true
 	}
 }
 
@@ -73,8 +89,11 @@ func FromTime(t time.Time) ReplayOpt {
 func FromBeginning() ReplayOpt {
 	return func(c *ReplayConfig) {
 		c.DeliverPolicy = DeliverAll
+		c.deliverSet = true
 		c.OptStartSeq = 0
+		c.optStartSeqSet = true
 		c.OptStartTime = nil
+		c.optStartTimeSet = true
 	}
 }
 
@@ -82,8 +101,11 @@ func FromBeginning() ReplayOpt {
 func FromNew() ReplayOpt {
 	return func(c *ReplayConfig) {
 		c.DeliverPolicy = DeliverNew
+		c.deliverSet = true
 		c.OptStartSeq = 0
+		c.optStartSeqSet = true
 		c.OptStartTime = nil
+		c.optStartTimeSet = true
 	}
 }
 

@@ -21,18 +21,20 @@ func TestCreateOrUpdateConsumerRejectsDeliverPolicyChange(t *testing.T) {
 
 	durable := uniqueDurable(t, "recreate")
 	_, err = client.Consumers().CreateOrUpdateConsumer(ctx, stream, DurableConsumerConfig{
-		Durable:       durable,
-		FilterSubject: prefix + ">",
-		DeliverPolicy: DeliverAll,
-		MaxAckPending: 42,
+		Durable:          durable,
+		FilterSubject:    prefix + ">",
+		DeliverPolicy:    DeliverAll,
+		HasDeliverPolicy: true,
+		MaxAckPending:    42,
 	})
 	require.NoError(t, err)
 
 	_, err = client.Consumers().CreateOrUpdateConsumer(ctx, stream, DurableConsumerConfig{
-		Durable:       durable,
-		FilterSubject: prefix + ">",
-		DeliverPolicy: DeliverNew,
-		MaxAckPending: 42,
+		Durable:          durable,
+		FilterSubject:    prefix + ">",
+		DeliverPolicy:    DeliverNew,
+		HasDeliverPolicy: true,
+		MaxAckPending:    42,
 	})
 	require.ErrorIs(t, err, ErrConsumerRecreateRequired)
 
@@ -40,6 +42,39 @@ func TestCreateOrUpdateConsumerRejectsDeliverPolicyChange(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, DeliverAll, info.Config.DeliverPolicy)
 	assert.Equal(t, 42, info.Config.MaxAckPending)
+}
+
+func TestCreateOrUpdateConsumerOmitsDeliverPolicyKeepsExisting(t *testing.T) {
+	t.Parallel()
+	client, ctx := testClient(t)
+	stream := uniqueStream(t, "KEEPDEL")
+	prefix := streamSubjectPrefix(stream)
+	_, err := client.Streams().CreateOrUpdateStream(ctx, StreamConfig{
+		Name: stream, Subjects: []string{prefix + ">"}, Storage: MemoryStorage,
+	})
+	require.NoError(t, err)
+
+	durable := uniqueDurable(t, "keepdel")
+	_, err = client.Consumers().CreateOrUpdateConsumer(ctx, stream, DurableConsumerConfig{
+		Durable:          durable,
+		FilterSubject:    prefix + ">",
+		DeliverPolicy:    DeliverNew,
+		HasDeliverPolicy: true,
+		MaxAckPending:    10,
+	})
+	require.NoError(t, err)
+
+	_, err = client.Consumers().CreateOrUpdateConsumer(ctx, stream, DurableConsumerConfig{
+		Durable:       durable,
+		FilterSubject: prefix + ">",
+		MaxAckPending: 99,
+	})
+	require.NoError(t, err)
+
+	info, err := client.Consumers().ConsumerInfo(ctx, stream, durable)
+	require.NoError(t, err)
+	assert.Equal(t, DeliverNew, info.Config.DeliverPolicy)
+	assert.Equal(t, 99, info.Config.MaxAckPending)
 }
 
 func TestKVCreateOrUpdateUpdatesTTL(t *testing.T) {

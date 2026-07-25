@@ -263,6 +263,12 @@ type DurableConsumerConfig struct {
 	OptStartSeq       uint64
 	FlowControl       bool
 	MemStorage        bool
+	// HasAckPolicy marks AckPolicy as intentionally set so AckNone (zero) is preserved.
+	HasAckPolicy bool
+	// HasDeliverPolicy marks DeliverPolicy as intentionally set (including DeliverAll).
+	HasDeliverPolicy bool
+	// HasReplayPolicy marks ReplayPolicy as intentionally set (including ReplayInstant).
+	HasReplayPolicy bool
 }
 
 type BackpressureConfig struct {
@@ -275,14 +281,23 @@ type BackpressureConfig struct {
 
 // ReplayConfig holds replay seek settings. Prefer ReplayOpt helpers
 // (FromSeq, FromTime, WithReplayPolicy, …) at call sites.
+//
+// Zero-value JetStream enums (DeliverAll, ReplayInstant, AckNone) are valid;
+// set flags track whether an option explicitly chose a policy or start position.
+//
+// goalign:ignore
 type ReplayConfig struct {
-	OptStartTime   *time.Time
-	Durable        string // target durable for CreateReplayConsumer; ignored by ResetConsumer
-	FilterSubject  string
-	FilterSubjects []string
-	DeliverPolicy  DeliverPolicy
-	ReplayPolicy   ReplayPolicy
-	OptStartSeq    uint64
+	OptStartTime    *time.Time
+	Durable         string // target durable for CreateReplayConsumer; ignored by ResetConsumer
+	FilterSubject   string
+	FilterSubjects  []string
+	DeliverPolicy   DeliverPolicy
+	ReplayPolicy    ReplayPolicy
+	OptStartSeq     uint64
+	deliverSet      bool
+	replaySet       bool
+	optStartSeqSet  bool
+	optStartTimeSet bool
 }
 
 // MetricsConfig is a configured value type.

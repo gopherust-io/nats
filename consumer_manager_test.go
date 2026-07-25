@@ -27,6 +27,9 @@ func TestToNatsConsumerConfigCustom(t *testing.T) {
 		DeliverPolicy:     DeliverNew,
 		ReplayPolicy:      ReplayOriginal,
 		AckPolicy:         AckAll,
+		HasAckPolicy:      true,
+		HasDeliverPolicy:  true,
+		HasReplayPolicy:   true,
 		MaxDeliver:        5,
 		AckWait:           15 * time.Second,
 		MaxAckPending:     200,
@@ -57,6 +60,32 @@ func TestToNatsConsumerConfigCustom(t *testing.T) {
 	assert.Equal(t, 50, cc.MaxWaiting)
 	assert.Equal(t, uint64(42), cc.OptStartSeq)
 	assert.Equal(t, &start, cc.OptStartTime)
+}
+
+func TestToNatsConsumerConfigAckNonePreserved(t *testing.T) {
+	cc := toNatsConsumerConfig(DurableConsumerConfig{
+		Durable:      "fire-forget",
+		AckPolicy:    AckNone,
+		HasAckPolicy: true,
+	})
+	assert.Equal(t, AckNone, cc.AckPolicy)
+}
+
+func TestToNatsConsumerConfigDeliverAllExplicit(t *testing.T) {
+	cc := toNatsConsumerConfig(DurableConsumerConfig{
+		Durable:          "all",
+		DeliverPolicy:    DeliverAll,
+		HasDeliverPolicy: true,
+	})
+	assert.Equal(t, DeliverAll, cc.DeliverPolicy)
+}
+
+func TestToNatsConsumerConfigOmitsUnsetDeliverPolicy(t *testing.T) {
+	cc := toNatsConsumerConfig(DurableConsumerConfig{
+		Durable:       "worker",
+		DeliverPolicy: DeliverNew, // ignored without HasDeliverPolicy
+	})
+	assert.Equal(t, DeliverAll, cc.DeliverPolicy)
 }
 
 func TestToNatsConsumerConfigFilterSubjectsOnly(t *testing.T) {

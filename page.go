@@ -1,6 +1,7 @@
 package nats
 
 // pageSlice returns items[offset:offset+limit] and the total length.
+// When limit < 0, all items from offset to the end are returned (same as ListStreamsPage).
 // When offset is past the end, it returns an empty slice and the total.
 func pageSlice[T any](items []T, offset, limit int) ([]T, int) {
 	total := len(items)
@@ -8,12 +9,12 @@ func pageSlice[T any](items []T, offset, limit int) ([]T, int) {
 		offset = 0
 	}
 
-	if limit < 0 {
-		limit = 0
-	}
-
 	if offset >= total {
 		return items[:0:0], total
+	}
+
+	if limit < 0 {
+		return items[offset:], total
 	}
 
 	end := offset + limit

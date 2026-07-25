@@ -195,10 +195,11 @@ func TestReplayCreateReplayConsumerAndPeek(t *testing.T) {
 
 	source := uniqueDurable(t, "live")
 	_, err = client.Consumers().CreateOrUpdateConsumer(ctx, stream, DurableConsumerConfig{
-		Durable:       source,
-		FilterSubject: prefix + ">",
-		MaxAckPending: 500,
-		DeliverPolicy: DeliverNew,
+		Durable:          source,
+		FilterSubject:    prefix + ">",
+		MaxAckPending:    500,
+		DeliverPolicy:    DeliverNew,
+		HasDeliverPolicy: true,
 	})
 	require.NoError(t, err)
 

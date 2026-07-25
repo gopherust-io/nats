@@ -48,6 +48,23 @@ func TestStartProcessSpanDisabled(t *testing.T) {
 	assert.False(t, span.IsRecording())
 }
 
+func TestStartPublishSpanDisabledDoesNotEndParent(t *testing.T) {
+	sr := tracetest.NewSpanRecorder()
+	provider := sdktrace.NewTracerProvider(
+		sdktrace.WithSpanProcessor(sr),
+		sdktrace.WithSampler(sdktrace.AlwaysSample()),
+	)
+	otel.SetTracerProvider(provider)
+
+	parentCtx, parent := otel.Tracer("test").Start(context.Background(), "parent")
+	_, span := startPublishSpan(parentCtx, "orders.created", false)
+	endSpan(span, nil)
+
+	assert.False(t, span.IsRecording())
+	assert.True(t, parent.IsRecording())
+	parent.End()
+}
+
 func TestJetStreamMetadataSkipsEmptyReply(t *testing.T) {
 	assert.Nil(t, jetStreamMetadata(nil))
 	assert.Nil(t, jetStreamMetadata(&natspkg.Msg{Subject: "orders.created"}))

@@ -8,6 +8,7 @@ import (
 	natspkg "github.com/nats-io/nats.go"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
+	tracenoop "go.opentelemetry.io/otel/trace/noop"
 
 	"github.com/gopherust-io/tel"
 
@@ -41,7 +42,8 @@ func releaseHeaderCarrier(m map[string][]string) {
 
 func startPublishSpan(ctx context.Context, subject string, allowTracing bool) (context.Context, trace.Span) {
 	if !allowTracing {
-		return ctx, trace.SpanFromContext(ctx)
+		// Never return a parent span — endSpan would end the caller's span.
+		return ctx, tracenoop.Span{}
 	}
 
 	telem := tel.FromCtx(ctx)
@@ -58,7 +60,7 @@ func startPublishSpan(ctx context.Context, subject string, allowTracing bool) (c
 
 func startRequestSpan(ctx context.Context, subject string, allowTracing bool) (context.Context, trace.Span) {
 	if !allowTracing {
-		return ctx, trace.SpanFromContext(ctx)
+		return ctx, tracenoop.Span{}
 	}
 
 	telem := tel.FromCtx(ctx)
@@ -73,7 +75,7 @@ func startRequestSpan(ctx context.Context, subject string, allowTracing bool) (c
 
 func startReplySpan(ctx context.Context, msg *natspkg.Msg, allowTracing bool) (context.Context, trace.Span) {
 	if !allowTracing {
-		return ctx, trace.SpanFromContext(ctx)
+		return ctx, tracenoop.Span{}
 	}
 
 	carrier := acquireHeaderCarrier()
@@ -168,7 +170,7 @@ func jetStreamMetadata(msg *natspkg.Msg) *natspkg.MsgMetadata {
 
 func startProcessSpan(ctx context.Context, msg *natspkg.Msg, allowTracing bool, meta *natspkg.MsgMetadata) (context.Context, trace.Span) {
 	if !allowTracing {
-		return ctx, trace.SpanFromContext(ctx)
+		return ctx, tracenoop.Span{}
 	}
 
 	carrier := acquireHeaderCarrier()

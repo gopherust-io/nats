@@ -130,7 +130,7 @@ func (r *replay) baseDurableConfig(ctx context.Context, stream, durable string) 
 	info, err := r.consumers.ConsumerInfo(ctx, stream, durable)
 	if err != nil {
 		if errors.Is(err, natspkg.ErrConsumerNotFound) {
-			return DurableConsumerConfig{Durable: durable, AckPolicy: AckExplicit}, nil
+			return DurableConsumerConfig{Durable: durable, AckPolicy: AckExplicit, HasAckPolicy: true}, nil
 		}
 
 		return DurableConsumerConfig{}, err
@@ -158,6 +158,9 @@ func durableConfigFromNATS(cc natspkg.ConsumerConfig) DurableConsumerConfig {
 		MemStorage:        cc.MemoryStorage,
 		MaxWaiting:        cc.MaxWaiting,
 		OptStartSeq:       cc.OptStartSeq,
+		HasAckPolicy:      true,
+		HasDeliverPolicy:  true,
+		HasReplayPolicy:   true,
 	}
 	if cc.OptStartTime != nil {
 		t := *cc.OptStartTime
@@ -181,24 +184,32 @@ func applyReplayConfig(base DurableConsumerConfig, durable string, cfg ReplayCon
 		out.FilterSubject = empty
 	}
 
-	if cfg.DeliverPolicy != 0 {
+	if cfg.deliverSet {
 		out.DeliverPolicy = cfg.DeliverPolicy
+		out.HasDeliverPolicy = true
 	}
 
-	if cfg.ReplayPolicy != 0 {
+	if cfg.replaySet {
 		out.ReplayPolicy = cfg.ReplayPolicy
+		out.HasReplayPolicy = true
 	}
 
-	out.OptStartSeq = cfg.OptStartSeq
-	if cfg.OptStartTime != nil {
-		t := *cfg.OptStartTime
-		out.OptStartTime = &t
-	} else if cfg.DeliverPolicy != DeliverByStartTime {
-		out.OptStartTime = nil
+	if cfg.optStartSeqSet {
+		out.OptStartSeq = cfg.OptStartSeq
 	}
 
-	if out.AckPolicy == 0 {
+	if cfg.optStartTimeSet {
+		if cfg.OptStartTime != nil {
+			t := *cfg.OptStartTime
+			out.OptStartTime = &t
+		} else {
+			out.OptStartTime = nil
+		}
+	}
+
+	if !out.HasAckPolicy && out.AckPolicy == 0 {
 		out.AckPolicy = AckExplicit
+		out.HasAckPolicy = true
 	}
 
 	return out

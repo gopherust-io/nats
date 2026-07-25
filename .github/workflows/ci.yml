@@ -62,12 +62,22 @@ jobs:
           args: --timeout=3m
           skip-cache: false
           skip-save-cache: ${{ github.ref != 'refs/heads/main' }}
-      - name: Run goalign
+      - name: Cache goalign
+        id: goalign-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/go/bin/goalign
+          key: goalign-v1.1.0-${{ runner.os }}
+      - name: Install goalign
+        if: steps.goalign-cache.outputs.cache-hit != 'true'
         run: |
           set -euo pipefail
           ver=v1.1.0
+          mkdir -p "${HOME}/go/bin"
           curl -fsSL "https://github.com/gopherust-io/goalign/archive/refs/tags/${ver}.tar.gz" | tar -xz -C /tmp
           (cd "/tmp/goalign-${ver#v}" && go build -o "${HOME}/go/bin/goalign" .)
+      - name: Run goalign
+        run: |
           echo "${HOME}/go/bin" >> "${GITHUB_PATH}"
           goalign analyze -r --arch=amd64 --fail-on-findings --min-waste=1 -e examples/,tools/ .
 
@@ -96,6 +106,7 @@ jobs:
   bench:
     name: Critical benchmarks
     runs-on: ubuntu-latest
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -118,6 +129,7 @@ jobs:
   fuzz:
     name: Fuzz smoke
     runs-on: ubuntu-latest
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

@@ -340,8 +340,11 @@ func TestReplayCreateReplayConsumerRejectsSameName(t *testing.T) {
 func TestApplyReplayOpts(t *testing.T) {
 	cfg := applyReplayOpts([]ReplayOpt{FromSeq(42), WithReplayPolicy(ReplayOriginal)})
 	assert.Equal(t, DeliverByStartSequence, cfg.DeliverPolicy)
+	assert.True(t, cfg.deliverSet)
 	assert.Equal(t, uint64(42), cfg.OptStartSeq)
+	assert.True(t, cfg.optStartSeqSet)
 	assert.Equal(t, ReplayOriginal, cfg.ReplayPolicy)
+	assert.True(t, cfg.replaySet)
 
 	start := time.Date(2024, 1, 2, 3, 4, 5, 0, time.UTC)
 	cfg = applyReplayOpts([]ReplayOpt{FromTime(start), WithFilterSubject("orders.>")})
@@ -353,11 +356,68 @@ func TestApplyReplayOpts(t *testing.T) {
 
 	cfg = applyReplayOpts([]ReplayOpt{FromBeginning()})
 	assert.Equal(t, DeliverAll, cfg.DeliverPolicy)
+	assert.True(t, cfg.deliverSet)
 
 	cfg = applyReplayOpts([]ReplayOpt{FromNew(), WithFilterSubjects("a.>", "b.>")})
 	assert.Equal(t, DeliverNew, cfg.DeliverPolicy)
 	assert.Equal(t, []string{"a.>", "b.>"}, cfg.FilterSubjects)
 	assert.Empty(t, cfg.FilterSubject)
+}
+
+func TestApplyReplayConfigFromBeginningOverridesDeliverNew(t *testing.T) {
+	base := DurableConsumerConfig{
+		Durable:          "worker",
+		DeliverPolicy:    DeliverNew,
+		HasDeliverPolicy: true,
+		AckPolicy:        AckExplicit,
+		HasAckPolicy:     true,
+		OptStartSeq:      99,
+	}
+	cfg := applyReplayOpts([]ReplayOpt{FromBeginning()})
+	out := applyReplayConfig(base, "worker", cfg)
+	assert.Equal(t, DeliverAll, out.DeliverPolicy)
+	assert.Zero(t, out.OptStartSeq)
+	assert.Nil(t, out.OptStartTime)
+}
+
+func TestApplyReplayConfigReplayInstantOverridesOriginal(t *testing.T) {
+	base := DurableConsumerConfig{
+		Durable:         "worker",
+		ReplayPolicy:    ReplayOriginal,
+		HasReplayPolicy: true,
+		HasAckPolicy:    true,
+		AckPolicy:       AckExplicit,
+	}
+	cfg := applyReplayOpts([]ReplayOpt{WithReplayPolicy(ReplayInstant)})
+	out := applyReplayConfig(base, "worker", cfg)
+	assert.Equal(t, ReplayInstant, out.ReplayPolicy)
+}
+
+func TestApplyReplayConfigFilterOnlyPreservesStart(t *testing.T) {
+	start := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	base := DurableConsumerConfig{
+		Durable:          "worker",
+		DeliverPolicy:    DeliverByStartSequence,
+		HasDeliverPolicy: true,
+		OptStartSeq:      42,
+		OptStartTime:     &start,
+		AckPolicy:        AckExplicit,
+		HasAckPolicy:     true,
+	}
+	cfg := applyReplayOpts([]ReplayOpt{WithFilterSubject("orders.>")})
+	out := applyReplayConfig(base, "worker", cfg)
+	assert.Equal(t, "orders.>", out.FilterSubject)
+	assert.Equal(t, DeliverByStartSequence, out.DeliverPolicy)
+	assert.Equal(t, uint64(42), out.OptStartSeq)
+	require.NotNil(t, out.OptStartTime)
+	assert.True(t, out.OptStartTime.Equal(start))
+}
+
+func TestPageSliceLimitNegativeReturnsAll(t *testing.T) {
+	items := []int{1, 2, 3, 4}
+	page, total := pageSlice(items, 1, -1)
+	assert.Equal(t, 4, total)
+	assert.Equal(t, []int{2, 3, 4}, page)
 }
 
 func TestNewClientInvalidNKeySeed(t *testing.T) {

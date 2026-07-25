@@ -288,6 +288,8 @@ func (p *publisher) publishAsync(ctx context.Context, subject string, msg Messag
 		p.recordAsyncAccepted(ctx, subject, len(prep.data))
 	}
 
+	endSpan(span, nil)
+
 	return future, nil
 }
 

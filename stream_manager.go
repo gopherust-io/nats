@@ -202,11 +202,6 @@ func (s *streamManager) ListStreamsPage(_ context.Context, offset, limit int) ([
 	names := s.streamNames()
 
 	total := len(names)
-	if limit < 0 {
-		limit = total
-		offset = 0
-	}
-
 	pageNames, _ := pageSlice(names, offset, limit)
 	infos := make([]*natspkg.StreamInfo, 0, len(pageNames))
 

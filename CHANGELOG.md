@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.2.1
+
+- Fix zero-value JetStream enum merges: `FromBeginning()`, `WithReplayPolicy(ReplayInstant)`,
+  and `AckNone` now apply correctly via explicit set flags.
+- `ResetConsumer` preserves `OptStartSeq` / `OptStartTime` unless seek opts change them.
+- `CreateOrUpdateConsumer` treats any deliver-policy change (including to `DeliverAll`) as recreate-required.
+- End OpenTelemetry spans on successful `PublishAsync`.
+- Label stream/consumer JetStream gauges with stream / `stream.durable` via `RecordWith`.
+- `pageSlice` / KV / Object `limit < 0` returns all items from offset (aligned with streams/consumers).
+- Soft-skip `ErrConsumerNotFound` during `ListConsumersPage`.
+
 ## v0.2.0
 
 - Admin APIs for console/ops: `AddStream`/`UpdateStream`, `ListStreamsPage`,
