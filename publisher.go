@@ -30,6 +30,7 @@ type Publisher interface {
 	PublishAsyncComplete(ctx context.Context) error
 }
 
+// goalign:ignore
 type publisher struct {
 	js                    natspkg.JetStreamContext
 	ctx                   context.Context

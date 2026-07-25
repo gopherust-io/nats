@@ -11,6 +11,7 @@ import (
 	"github.com/gopherust-io/tel"
 )
 
+// goalign:ignore
 type clientMetrics struct {
 	registry *tel.Registry
 

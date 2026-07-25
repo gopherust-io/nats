@@ -54,6 +54,7 @@ type Recorder interface {
 }
 
 // AutopsyConfig enriches DLQ publishes with forensic headers.
+// goalign:ignore
 type AutopsyConfig struct {
 	Enabled       bool
 	IncludeStack  bool

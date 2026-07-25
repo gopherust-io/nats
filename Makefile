@@ -11,12 +11,15 @@ NATS_CLUSTER_COMPOSE := docker/nats/cluster/docker-compose.yml
 NATS_AUTH_COMPOSE := docker/nats/auth/docker-compose.yml
 NATS_HEALTHZ := http://127.0.0.1:8222/healthz
 
-.PHONY: help test test-race coverage coverage-html bench bench-codec fuzz ci vet fmt fmt-check lint lint-fix govulncheck align examples \
+.PHONY: help test test-race coverage coverage-html bench bench-codec fuzz ci vet fmt fmt-check lint lint-fix govulncheck align align-fix examples \
 	nats-up nats-down nats-cluster-up nats-auth-up nats-down-all loadtest demo demo-nats dev
 
 GOLANGCI_LINT := go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2
 GOVULNCHECK := go run golang.org/x/vuln/cmd/govulncheck@v1.6.0
 BETTERALIGN := go run github.com/dkorunic/betteralign/cmd/betteralign@v0.7.2
+GOALIGN_VERSION := v1.1.0
+GOALIGN_BIN := $(CURDIR)/.cache/goalign-$(GOALIGN_VERSION)
+GOALIGN_FLAGS := analyze -r --arch=amd64 --fail-on-findings --min-waste=1 -e examples/,tools/ .
 
 help:
 	@echo "Targets:"
@@ -39,10 +42,11 @@ help:
 	@echo "  ci                fmt-check + unit tests + race detector + vet + lint"
 	@echo "  fmt               gofmt -w all Go files"
 	@echo "  fmt-check         fail if any file needs gofmt"
-	@echo "  lint              Run govulncheck + golangci-lint (includes fieldalignment)"
+	@echo "  lint              Run govulncheck + goalign + golangci-lint (includes fieldalignment)"
 	@echo "  lint-fix          Run golangci-lint with --fix"
 	@echo "  govulncheck       Scan dependencies for known vulnerabilities"
-	@echo "  align             Reorder struct fields for optimal memory layout (betteralign)"
+	@echo "  align             Fail if goalign finds waste >= 1 byte (excludes examples/,tools/)"
+	@echo "  align-fix        Reorder struct fields via betteralign -apply (local; then make align)"
 	@echo "  vet               go vet on all packages"
 	@echo "  examples          Build example programs"
 
@@ -133,7 +137,7 @@ fmt:
 fmt-check:
 	@test -z "$$(gofmt -l .)" || (gofmt -l . && exit 1)
 
-lint: govulncheck
+lint: govulncheck align
 	$(GOLANGCI_LINT) run ./...
 
 lint-fix:
@@ -142,7 +146,17 @@ lint-fix:
 govulncheck:
 	$(GOVULNCHECK) ./...
 
-align:
+align: $(GOALIGN_BIN)
+	$(GOALIGN_BIN) $(GOALIGN_FLAGS)
+
+$(GOALIGN_BIN):
+	@mkdir -p $(dir $@)
+	@tmpdir=$$(mktemp -d) && \
+		curl -fsSL https://github.com/gopherust-io/goalign/archive/refs/tags/$(GOALIGN_VERSION).tar.gz | tar -xz -C $$tmpdir && \
+		(cd $$tmpdir/goalign-$(patsubst v%,%,$(GOALIGN_VERSION)) && go build -o $(GOALIGN_BIN) .) && \
+		rm -rf $$tmpdir
+
+align-fix:
 	$(BETTERALIGN) -apply ./...
 
 examples:

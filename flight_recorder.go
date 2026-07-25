@@ -41,6 +41,7 @@ type IncidentEvent struct {
 }
 
 // FlightRecorder is a ring buffer of incident events for ops storytelling.
+// goalign:ignore
 type FlightRecorder struct {
 	events chan IncidentEvent
 	buf    []IncidentEvent

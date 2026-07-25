@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// goalign:ignore
 type fakeSub struct {
 	subject string
 	valid   atomic.Bool

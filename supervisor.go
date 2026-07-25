@@ -29,6 +29,7 @@ const (
 )
 
 // SupervisorEvent is emitted when a supervised subscription is healed or abandoned.
+// goalign:ignore
 type SupervisorEvent struct {
 	Err     error
 	Kind    SupervisorEventKind

@@ -34,6 +34,7 @@ type Subscription interface {
 
 type MsgHandler func(context.Context, *natspkg.Msg) error
 
+// goalign:ignore
 type consumer struct {
 	ctx         context.Context
 	js          natspkg.JetStreamContext

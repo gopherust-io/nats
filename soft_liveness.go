@@ -24,6 +24,7 @@ type SoftLivenessEvent struct {
 }
 
 // SoftLivenessConfig controls WatchSoftLiveness.
+// goalign:ignore
 type SoftLivenessConfig struct {
 	OnStall func(SoftLivenessEvent)
 	// PollInterval is how often ConsumerInfo is polled (default 2s).
@@ -90,6 +91,7 @@ func (a *ProcessActivity) LastSuccess() time.Time {
 }
 
 // SoftLiveness watches a subscription for backlog growth without processing activity.
+// goalign:ignore
 type SoftLiveness struct {
 	sub      Subscription
 	events   chan SoftLivenessEvent

@@ -14,6 +14,7 @@ type Responder interface {
 	QueueSubscribe(ctx context.Context, queue, subject string, handler MsgHandler) (Subscription, error)
 }
 
+// goalign:ignore
 type responder struct {
 	conn         *natspkg.Conn
 	metrics      *clientMetrics

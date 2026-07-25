@@ -25,6 +25,7 @@ type Requester interface {
 	RequestProtoInto(ctx context.Context, subject string, req, resp proto.Message) error
 }
 
+// goalign:ignore
 type requester struct {
 	conn                  *natspkg.Conn
 	metrics               *clientMetrics

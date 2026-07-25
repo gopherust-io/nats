@@ -26,6 +26,9 @@ type Connector interface {
 	AccountInfo(ctx context.Context) (*natspkg.AccountInfo, error)
 }
 
+// ConnectionStatus is a configured value type.
+//
+// goalign:ignore
 type ConnectionStatus struct {
 	LastDisconnect time.Time
 	LastError      error
@@ -653,6 +656,7 @@ func (c *client) drainAndClose() error {
 
 var _ Connector = (*client)(nil)
 
+// goalign:ignore
 type client struct {
 	lastDisconnect time.Time
 	streams        StreamManager

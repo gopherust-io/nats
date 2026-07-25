@@ -62,6 +62,14 @@ jobs:
           args: --timeout=3m
           skip-cache: false
           skip-save-cache: ${{ github.ref != 'refs/heads/main' }}
+      - name: Run goalign
+        run: |
+          set -euo pipefail
+          ver=v1.1.0
+          curl -fsSL "https://github.com/gopherust-io/goalign/archive/refs/tags/${ver}.tar.gz" | tar -xz -C /tmp
+          (cd "/tmp/goalign-${ver#v}" && go build -o "${HOME}/go/bin/goalign" .)
+          echo "${HOME}/go/bin" >> "${GITHUB_PATH}"
+          goalign analyze -r --arch=amd64 --fail-on-findings --min-waste=1 -e examples/,tools/ .
 
   race:
     name: Race detector

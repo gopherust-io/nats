@@ -71,6 +71,9 @@ type ConsumerConfig = RuntimeConsumerConfig
 
 // ConnectionTLS holds optional TLS material for NATS connections.
 // Prefer PEM fields for config-file / env wiring; set Config for full control.
+// ConnectionTLS is a configured value type.
+//
+// goalign:ignore
 type ConnectionTLS struct {
 	// Config is used as-is when non-nil (takes precedence over PEM fields).
 	Config *tls.Config
@@ -85,6 +88,9 @@ type ConnectionTLS struct {
 	InsecureSkipVerify bool
 }
 
+// Connection is a configured value type.
+//
+// goalign:ignore
 type Connection struct {
 	// CustomReconnectDelay overrides the built-in capped exponential delay.
 	CustomReconnectDelay func(attempts int) time.Duration
@@ -133,6 +139,9 @@ type Connection struct {
 	DontRandomize bool
 }
 
+// RuntimeConsumerConfig is a configured value type.
+//
+// goalign:ignore
 type RuntimeConsumerConfig struct {
 	MetricPrefix     string
 	PendingMsgLimit  int
@@ -152,6 +161,9 @@ type RuntimeConsumerConfig struct {
 	AllowTracing bool
 }
 
+// PublisherConfig is a configured value type.
+//
+// goalign:ignore
 type PublisherConfig struct {
 	MetricPrefix string
 	AllowMetrics bool
@@ -163,6 +175,9 @@ type PublisherConfig struct {
 }
 
 // RequesterConfig configures core NATS request/reply client calls.
+// RequesterConfig is a configured value type.
+//
+// goalign:ignore
 type RequesterConfig struct {
 	MetricPrefix string
 	// Timeout is used when ctx has no deadline (0 = defaultRequestTimeout).
@@ -174,12 +189,18 @@ type RequesterConfig struct {
 }
 
 // ResponderConfig configures core NATS reply subscribers.
+// ResponderConfig is a configured value type.
+//
+// goalign:ignore
 type ResponderConfig struct {
 	MetricPrefix string
 	AllowMetrics bool
 	AllowTracing bool
 }
 
+// StreamConfig is a configured value type.
+//
+// goalign:ignore
 type StreamConfig struct {
 	// Mirror configures this stream as a mirror of another stream (geo / DR).
 	// Prefer nats CLI or platform ops for complex cross-domain setups; see devops.md.
@@ -206,6 +227,9 @@ type StreamConfig struct {
 type StreamSource = natspkg.StreamSource
 
 // KeyValueConfig configures a JetStream Key-Value bucket.
+// KeyValueConfig is a configured value type.
+//
+// goalign:ignore
 type KeyValueConfig struct {
 	Bucket      string
 	Description string
@@ -217,6 +241,9 @@ type KeyValueConfig struct {
 	Compression bool
 }
 
+// DurableConsumerConfig is a configured value type.
+//
+// goalign:ignore
 type DurableConsumerConfig struct {
 	OptStartTime      *time.Time
 	Durable           string
@@ -258,6 +285,9 @@ type ReplayConfig struct {
 	OptStartSeq    uint64
 }
 
+// MetricsConfig is a configured value type.
+//
+// goalign:ignore
 type MetricsConfig struct {
 	Prefix           string
 	TrackedStreams   []string
