@@ -31,3 +31,14 @@ Do **not** open a public issue, pull request, or discussion for vulnerability re
 4. We credit reporters in the advisory unless you request anonymity.
 
 Thank you for helping keep this project and its users secure.
+
+## Maintainer checklist (Scorecard / branch protection)
+
+For the default branch (`main`), keep GitHub settings aligned with OpenSSF Scorecard:
+
+- Require pull requests before merge (≥1 approving review)
+- Require status checks (CI “Test and lint”, CodeQL when listed)
+- Disallow force pushes and branch deletion
+- Include administrators in protection rules (or org rulesets)
+- Enable Dependabot alerts/security updates, secret scanning, and code scanning
+
