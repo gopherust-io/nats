@@ -14,6 +14,9 @@ import (
 // PubAckFuture is a future for an async JetStream publish ack.
 type PubAckFuture = natspkg.PubAckFuture
 
+// PubAck is a JetStream publish acknowledgement.
+type PubAck = natspkg.PubAck
+
 type Publisher interface {
 	PublishMessage(ctx context.Context, subject string, msg Message) error
 	PublishProto(ctx context.Context, subject string, payload proto.Message) error
@@ -313,6 +316,34 @@ func (p *publisher) PublishBytes(ctx context.Context, subject string, data []byt
 		Data:        data,
 		MessageType: Raw,
 	})
+}
+
+func (p *publisher) PublishRaw(ctx context.Context, subject string, data []byte, headers map[string]string) (*PubAck, error) {
+	if err := p.guardConnected(); err != nil {
+		return nil, err
+	}
+
+	if err := p.validateSubject(subject); err != nil {
+		return nil, err
+	}
+
+	msg := &natspkg.Msg{Subject: subject, Data: data}
+	for k, v := range headers {
+		if msg.Header == nil {
+			msg.Header = natspkg.Header{}
+		}
+
+		msg.Header.Set(k, v)
+	}
+
+	ack, err := p.js.PublishMsg(msg)
+	if err != nil {
+		p.recordError(ctx, subject)
+
+		return nil, fmt.Errorf("publish raw subject=%q: %w", subject, err)
+	}
+
+	return ack, nil
 }
 
 func (p *publisher) PublishBytesWithMsgID(ctx context.Context, subject, id string, data []byte) error {

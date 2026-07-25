@@ -3,6 +3,7 @@ package nats
 import (
 	"context"
 	"fmt"
+	"sort"
 	"time"
 
 	natspkg "github.com/nats-io/nats.go"
@@ -11,9 +12,13 @@ import (
 
 type ConsumerManager interface {
 	CreateOrUpdateConsumer(ctx context.Context, stream string, cfg DurableConsumerConfig) (*natspkg.ConsumerInfo, error)
+	AddConsumer(ctx context.Context, stream string, cfg *natspkg.ConsumerConfig) (*natspkg.ConsumerInfo, error)
+	UpdateConsumer(ctx context.Context, stream string, cfg *natspkg.ConsumerConfig) (*natspkg.ConsumerInfo, error)
 	DeleteConsumer(ctx context.Context, stream, durable string) error
 	ConsumerInfo(ctx context.Context, stream, durable string) (*natspkg.ConsumerInfo, error)
+	ConsumerNames(ctx context.Context, stream string) ([]string, error)
 	ListConsumers(ctx context.Context, stream string) ([]*natspkg.ConsumerInfo, error)
+	ListConsumersPage(ctx context.Context, stream string, offset, limit int) ([]*natspkg.ConsumerInfo, int, error)
 	PauseConsumer(ctx context.Context, stream, durable string, pauseUntil time.Time) error
 	ResumeConsumer(ctx context.Context, stream, durable string) error
 }
@@ -116,6 +121,52 @@ func (m *consumerManager) CreateOrUpdateConsumer(
 	return info, nil
 }
 
+func (m *consumerManager) AddConsumer(_ context.Context, stream string, cfg *natspkg.ConsumerConfig) (*natspkg.ConsumerInfo, error) {
+	if err := ValidateStreamName(stream); err != nil {
+		return nil, err
+	}
+
+	if cfg == nil {
+		return nil, fmt.Errorf("add consumer stream=%q: %w", stream, ErrEmptyConfigNotAllowed)
+	}
+
+	if cfg.Durable != empty {
+		if err := ValidateDurableName(cfg.Durable); err != nil {
+			return nil, err
+		}
+	}
+
+	info, err := m.js.AddConsumer(stream, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("add consumer stream=%q durable=%q: %w", stream, cfg.Durable, err)
+	}
+
+	return info, nil
+}
+
+func (m *consumerManager) UpdateConsumer(_ context.Context, stream string, cfg *natspkg.ConsumerConfig) (*natspkg.ConsumerInfo, error) {
+	if err := ValidateStreamName(stream); err != nil {
+		return nil, err
+	}
+
+	if cfg == nil {
+		return nil, fmt.Errorf("update consumer stream=%q: %w", stream, ErrEmptyConfigNotAllowed)
+	}
+
+	if cfg.Durable != empty {
+		if err := ValidateDurableName(cfg.Durable); err != nil {
+			return nil, err
+		}
+	}
+
+	info, err := m.js.UpdateConsumer(stream, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("update consumer stream=%q durable=%q: %w", stream, cfg.Durable, err)
+	}
+
+	return info, nil
+}
+
 func (m *consumerManager) DeleteConsumer(_ context.Context, stream, durable string) error {
 	if err := ValidateStreamName(stream); err != nil {
 		return err
@@ -149,23 +200,53 @@ func (m *consumerManager) ConsumerInfo(_ context.Context, stream, durable string
 	return info, nil
 }
 
-func (m *consumerManager) ListConsumers(_ context.Context, stream string) ([]*natspkg.ConsumerInfo, error) {
+func (m *consumerManager) ConsumerNames(_ context.Context, stream string) ([]string, error) {
 	if err := ValidateStreamName(stream); err != nil {
 		return nil, err
 	}
 
-	infos := make([]*natspkg.ConsumerInfo, 0)
+	names := make([]string, 0)
 
 	for name := range m.js.ConsumerNames(stream) {
-		info, err := m.js.ConsumerInfo(stream, name)
-		if err != nil {
-			return nil, fmt.Errorf("list consumers stream=%q name=%q: %w", stream, name, err)
+		names = append(names, name)
+	}
+
+	sort.Strings(names)
+
+	return names, nil
+}
+
+func (m *consumerManager) ListConsumers(ctx context.Context, stream string) ([]*natspkg.ConsumerInfo, error) {
+	infos, _, err := m.ListConsumersPage(ctx, stream, 0, -1)
+
+	return infos, err
+}
+
+func (m *consumerManager) ListConsumersPage(ctx context.Context, stream string, offset, limit int) ([]*natspkg.ConsumerInfo, int, error) {
+	names, err := m.ConsumerNames(ctx, stream)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	total := len(names)
+	if limit < 0 {
+		limit = total
+		offset = 0
+	}
+
+	pageNames, _ := pageSlice(names, offset, limit)
+	infos := make([]*natspkg.ConsumerInfo, 0, len(pageNames))
+
+	for _, name := range pageNames {
+		info, infoErr := m.js.ConsumerInfo(stream, name)
+		if infoErr != nil {
+			return nil, total, fmt.Errorf("list consumers stream=%q name=%q: %w", stream, name, infoErr)
 		}
 
 		infos = append(infos, info)
 	}
 
-	return infos, nil
+	return infos, total, nil
 }
 
 func (m *consumerManager) PauseConsumer(ctx context.Context, stream, durable string, pauseUntil time.Time) error {

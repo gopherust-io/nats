@@ -4,15 +4,21 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 
 	natspkg "github.com/nats-io/nats.go"
 )
 
+// StreamManager manages JetStream streams (≤10 methods for interfacebloat).
+// StreamNames is available via ListStreamsPage; ListStreams is a convenience
+// wrapper implemented outside the interface.
 type StreamManager interface {
 	CreateOrUpdateStream(ctx context.Context, cfg StreamConfig) (*natspkg.StreamInfo, error)
+	AddStream(ctx context.Context, cfg *natspkg.StreamConfig) (*natspkg.StreamInfo, error)
+	UpdateStream(ctx context.Context, cfg *natspkg.StreamConfig) (*natspkg.StreamInfo, error)
 	DeleteStream(ctx context.Context, name string) error
 	StreamInfo(ctx context.Context, name string) (*natspkg.StreamInfo, error)
-	ListStreams(ctx context.Context) ([]*natspkg.StreamInfo, error)
+	ListStreamsPage(ctx context.Context, offset, limit int) ([]*natspkg.StreamInfo, int, error)
 	PurgeStream(ctx context.Context, name string, opts ...PurgeOpt) error
 	GetMsg(ctx context.Context, stream string, seq uint64) (*natspkg.RawStreamMsg, error)
 	GetLastMsg(ctx context.Context, stream, subject string) (*natspkg.RawStreamMsg, error)
@@ -97,6 +103,40 @@ func (s *streamManager) CreateOrUpdateStream(_ context.Context, cfg StreamConfig
 	return info, nil
 }
 
+func (s *streamManager) AddStream(_ context.Context, cfg *natspkg.StreamConfig) (*natspkg.StreamInfo, error) {
+	if cfg == nil {
+		return nil, fmt.Errorf("add stream: %w", ErrEmptyConfigNotAllowed)
+	}
+
+	if err := ValidateStreamName(cfg.Name); err != nil {
+		return nil, err
+	}
+
+	info, err := s.js.AddStream(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("add stream %q: %w", cfg.Name, err)
+	}
+
+	return info, nil
+}
+
+func (s *streamManager) UpdateStream(_ context.Context, cfg *natspkg.StreamConfig) (*natspkg.StreamInfo, error) {
+	if cfg == nil {
+		return nil, fmt.Errorf("update stream: %w", ErrEmptyConfigNotAllowed)
+	}
+
+	if err := ValidateStreamName(cfg.Name); err != nil {
+		return nil, err
+	}
+
+	info, err := s.js.UpdateStream(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("update stream %q: %w", cfg.Name, err)
+	}
+
+	return info, nil
+}
+
 func (s *streamManager) DeleteStream(_ context.Context, name string) error {
 	if err := ValidateStreamName(name); err != nil {
 		return err
@@ -122,24 +162,69 @@ func (s *streamManager) StreamInfo(_ context.Context, name string) (*natspkg.Str
 	return info, nil
 }
 
-func (s *streamManager) ListStreams(_ context.Context) ([]*natspkg.StreamInfo, error) {
-	infos := make([]*natspkg.StreamInfo, 0)
+func (s *streamManager) streamNames() []string {
+	names := make([]string, 0)
 
 	for name := range s.js.StreamNames() {
-		info, err := s.js.StreamInfo(name)
-		if err != nil {
+		names = append(names, name)
+	}
+
+	sort.Strings(names)
+
+	return names
+}
+
+// ListStreams returns all stream infos (convenience; not on StreamManager interface).
+func ListStreams(ctx context.Context, s StreamManager) ([]*natspkg.StreamInfo, error) {
+	infos, _, err := s.ListStreamsPage(ctx, 0, -1)
+
+	return infos, err
+}
+
+// StreamNames returns sorted stream names via a full ListStreamsPage.
+func StreamNames(ctx context.Context, s StreamManager) ([]string, error) {
+	infos, _, err := s.ListStreamsPage(ctx, 0, -1)
+	if err != nil {
+		return nil, err
+	}
+
+	names := make([]string, 0, len(infos))
+	for _, info := range infos {
+		if info != nil {
+			names = append(names, info.Config.Name)
+		}
+	}
+
+	return names, nil
+}
+
+func (s *streamManager) ListStreamsPage(_ context.Context, offset, limit int) ([]*natspkg.StreamInfo, int, error) {
+	names := s.streamNames()
+
+	total := len(names)
+	if limit < 0 {
+		limit = total
+		offset = 0
+	}
+
+	pageNames, _ := pageSlice(names, offset, limit)
+	infos := make([]*natspkg.StreamInfo, 0, len(pageNames))
+
+	for _, name := range pageNames {
+		info, infoErr := s.js.StreamInfo(name)
+		if infoErr != nil {
 			// Concurrent create/delete (e.g. KV buckets) can race the name listing.
-			if errors.Is(err, natspkg.ErrStreamNotFound) {
+			if errors.Is(infoErr, natspkg.ErrStreamNotFound) {
 				continue
 			}
 
-			return nil, fmt.Errorf("list streams: info %q: %w", name, err)
+			return nil, total, fmt.Errorf("list streams: info %q: %w", name, infoErr)
 		}
 
 		infos = append(infos, info)
 	}
 
-	return infos, nil
+	return infos, total, nil
 }
 
 func (s *streamManager) PurgeStream(_ context.Context, name string, opts ...PurgeOpt) error {

@@ -12,6 +12,8 @@ Quick lookup for SDK ergonomics beyond core `Client` methods.
 | `Requester()` / `Responder()` | Core NATS request/reply |
 | `SetupWorker(ctx, setup, handler)` | Create stream + durable + queue subscribe in one call |
 | `KV()` | JetStream Key-Value bucket manager |
+| `Objects()` | JetStream Object Store manager |
+| `Monitoring()` | HTTP fetch of NATS monitoring endpoints (`/jsz`, `/varz`, …) |
 
 ## Connector
 
@@ -22,14 +24,55 @@ Quick lookup for SDK ergonomics beyond core `Client` methods.
 | `HealthCheck(ctx)` | Connected + JetStream `AccountInfo` when available |
 | `ConnectionStatus()` | Server URL, reconnect count, last error/disconnect, lame-duck flag |
 | `Shutdown()` | Graceful: stop consumers → drain/flush connection → cancel context (idempotent) |
+| `Conn()` / `JetStream()` | Escape hatches to the underlying nats.go connection / JetStream context |
+| `AccountInfo(ctx)` | JetStream account info |
+
+Optional connection hooks on `Config.Conn`: `OnDisconnect`, `OnReconnect`, `OnClosed` (run after library handlers).
+
+## Streams (`Client.Streams()`)
+
+| Method | Description |
+|--------|-------------|
+| `CreateOrUpdateStream` | App-oriented create-or-update via `StreamConfig` |
+| `AddStream` / `UpdateStream` | Explicit create/update with `*nats.StreamConfig` |
+| `StreamNames` / `ListStreams` | Package helpers over `ListStreamsPage` |
+| `StreamInfo` / `DeleteStream` / `PurgeStream` | Inspect / delete / purge |
+| `GetMsg` / `GetLastMsg` / `GetNextMsgAfter` | Peek stored messages |
+
+## Consumers (`Client.Consumers()`)
+
+| Method | Description |
+|--------|-------------|
+| `CreateOrUpdateConsumer` | App-oriented durable create-or-update |
+| `AddConsumer` / `UpdateConsumer` | Explicit create/update with `*nats.ConsumerConfig` |
+| `ConsumerNames` / `ListConsumers` / `ListConsumersPage` | List / paginated list |
+| `ConsumerInfo` / `DeleteConsumer` | Inspect / delete |
+| `PauseConsumer` / `ResumeConsumer` | Pause until / resume (JetStream v2) |
 
 ## Key-Value (`Client.KV()`)
 
 | Method | Description |
 |--------|-------------|
 | `CreateOrUpdate(ctx, cfg)` | Create or update bucket config (TTL, MaxBytes, …) via JetStream v2; returns legacy `nats.KeyValue` |
+| `CreateRaw(ctx, cfg)` | Create via legacy API; returns `KVBucketStatus` |
 | `Open(ctx, bucket)` | Bind to an existing bucket |
 | `Delete(ctx, bucket)` | Delete the bucket |
+| `ListBuckets` / `BucketInfo` | Bucket inventory / status |
+| `Client.KVKeys()` | Key helpers: `ListKeys` / `Get` / `Put` / `DeleteKey` / `History` |
+
+## Object Store (`Client.Objects()`)
+
+| Method | Description |
+|--------|-------------|
+| `Create` / `CreateRaw` | Create bucket |
+| `ListBuckets` / `BucketInfo` / `Delete` | Bucket inventory / status / delete |
+| `ListObjects` / `Get` / `Put` / `DeleteObject` | Object CRUD (paged list) |
+
+## Monitoring (`Client.Monitoring()`)
+
+| Method | Description |
+|--------|-------------|
+| `Fetch(ctx, baseURL, path)` | GET `baseURL+path` (per-cluster monitoring root + `/jsz` etc.) |
 
 ## Replay
 

@@ -23,6 +23,14 @@ func (m *mockStreamManager) CreateOrUpdateStream(context.Context, StreamConfig) 
 	return nil, errors.New("not implemented")
 }
 
+func (m *mockStreamManager) AddStream(context.Context, *natspkg.StreamConfig) (*natspkg.StreamInfo, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (m *mockStreamManager) UpdateStream(context.Context, *natspkg.StreamConfig) (*natspkg.StreamInfo, error) {
+	return nil, errors.New("not implemented")
+}
+
 func (m *mockStreamManager) DeleteStream(context.Context, string) error {
 	return errors.New("not implemented")
 }
@@ -35,8 +43,8 @@ func (m *mockStreamManager) StreamInfo(context.Context, string) (*natspkg.Stream
 	return &natspkg.StreamInfo{State: natspkg.StreamState{LastSeq: m.lastSeq}}, nil
 }
 
-func (m *mockStreamManager) ListStreams(context.Context) ([]*natspkg.StreamInfo, error) {
-	return nil, errors.New("not implemented")
+func (m *mockStreamManager) ListStreamsPage(context.Context, int, int) ([]*natspkg.StreamInfo, int, error) {
+	return nil, 0, errors.New("not implemented")
 }
 
 func (m *mockStreamManager) PurgeStream(context.Context, string, ...PurgeOpt) error {
@@ -107,6 +115,14 @@ func (m *mockConsumerManager) CreateOrUpdateConsumer(
 	return &natspkg.ConsumerInfo{Name: cfg.Durable}, nil
 }
 
+func (m *mockConsumerManager) AddConsumer(context.Context, string, *natspkg.ConsumerConfig) (*natspkg.ConsumerInfo, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (m *mockConsumerManager) UpdateConsumer(context.Context, string, *natspkg.ConsumerConfig) (*natspkg.ConsumerInfo, error) {
+	return nil, errors.New("not implemented")
+}
+
 func (m *mockConsumerManager) DeleteConsumer(ctx context.Context, stream, durable string) error {
 	if m.deleteFn != nil {
 		return m.deleteFn(ctx, stream, durable)
@@ -123,8 +139,16 @@ func (m *mockConsumerManager) ConsumerInfo(ctx context.Context, stream, durable 
 	return nil, natspkg.ErrConsumerNotFound
 }
 
+func (m *mockConsumerManager) ConsumerNames(context.Context, string) ([]string, error) {
+	return nil, errors.New("not implemented")
+}
+
 func (m *mockConsumerManager) ListConsumers(context.Context, string) ([]*natspkg.ConsumerInfo, error) {
 	return nil, errors.New("not implemented")
+}
+
+func (m *mockConsumerManager) ListConsumersPage(context.Context, string, int, int) ([]*natspkg.ConsumerInfo, int, error) {
+	return nil, 0, errors.New("not implemented")
 }
 
 func (m *mockConsumerManager) PauseConsumer(context.Context, string, string, time.Time) error {

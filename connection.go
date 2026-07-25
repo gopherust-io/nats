@@ -21,6 +21,9 @@ type Connector interface {
 	HealthCheck(ctx context.Context) error
 	ConnectionStatus() ConnectionStatus
 	WaitConnected(ctx context.Context) error
+	Conn() *natspkg.Conn
+	JetStream() natspkg.JetStreamContext
+	AccountInfo(ctx context.Context) (*natspkg.AccountInfo, error)
 }
 
 type ConnectionStatus struct {
@@ -315,7 +318,7 @@ func (c *client) onConnect(_ *natspkg.Conn) {
 	}
 }
 
-func (c *client) onDisconnect(_ *natspkg.Conn, err error) {
+func (c *client) onDisconnect(nc *natspkg.Conn, err error) {
 	c.mu.Lock()
 	c.lastError = err
 	c.lastDisconnect = time.Now()
@@ -330,9 +333,13 @@ func (c *client) onDisconnect(_ *natspkg.Conn, err error) {
 	if c.metrics != nil && c.metrics.connectionState != nil {
 		c.metrics.connectionState.Record(c.ctx, 0)
 	}
+
+	if c.config != nil && c.config.Conn.OnDisconnect != nil {
+		c.config.Conn.OnDisconnect(nc, err)
+	}
 }
 
-func (c *client) onReconnect(_ *natspkg.Conn) {
+func (c *client) onReconnect(nc *natspkg.Conn) {
 	atomic.AddInt64(&c.reconnectCount, 1)
 
 	c.mu.Lock()
@@ -347,6 +354,10 @@ func (c *client) onReconnect(_ *natspkg.Conn) {
 
 	if c.metrics != nil && c.metrics.reconnectCount != nil {
 		c.metrics.reconnectCount.Add(c.ctx, 1)
+	}
+
+	if c.config != nil && c.config.Conn.OnReconnect != nil {
+		c.config.Conn.OnReconnect(nc)
 	}
 }
 
@@ -376,6 +387,10 @@ func (c *client) onClosed(nc *natspkg.Conn) {
 
 	if c.metrics != nil && c.metrics.connectionState != nil {
 		c.metrics.connectionState.Record(c.ctx, 0)
+	}
+
+	if c.config != nil && c.config.Conn.OnClosed != nil {
+		c.config.Conn.OnClosed(nc)
 	}
 }
 
@@ -410,6 +425,37 @@ func (c *client) onLameDuck(_ *natspkg.Conn) {
 	if c.metrics != nil && c.metrics.lameDuckEvents != nil {
 		c.metrics.lameDuckEvents.Add(c.ctx, 1)
 	}
+}
+
+func (c *client) Conn() *natspkg.Conn {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	return c.conn
+}
+
+func (c *client) JetStream() natspkg.JetStreamContext {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	return c.js
+}
+
+func (c *client) AccountInfo(_ context.Context) (*natspkg.AccountInfo, error) {
+	c.mu.RLock()
+	js := c.js
+	c.mu.RUnlock()
+
+	if js == nil {
+		return nil, ErrNatsConnectionNotEstablished
+	}
+
+	info, err := js.AccountInfo()
+	if err != nil {
+		return nil, fmt.Errorf("account info: %w", err)
+	}
+
+	return info, nil
 }
 
 func (c *client) IsConnected() bool {
@@ -611,7 +657,9 @@ type client struct {
 	lastDisconnect time.Time
 	streams        StreamManager
 	consumers      ConsumerManager
-	kv             KeyValueManager
+	kv             *keyValueManager
+	objects        ObjectStoreManager
+	monitoring     Monitoring
 	replay         Replay
 	js             natspkg.JetStreamContext
 

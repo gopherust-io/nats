@@ -89,6 +89,11 @@ type Connection struct {
 	// CustomReconnectDelay overrides the built-in capped exponential delay.
 	CustomReconnectDelay func(attempts int) time.Duration
 
+	// Optional hooks run after the library's internal connection handlers.
+	OnDisconnect func(*natspkg.Conn, error)
+	OnReconnect  func(*natspkg.Conn)
+	OnClosed     func(*natspkg.Conn)
+
 	Address  string
 	User     string
 	Password string

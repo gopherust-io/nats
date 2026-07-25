@@ -28,7 +28,7 @@ func TestStreamManagerCRUD(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, stream, info.Config.Name)
 
-	streams, err := client.Streams().ListStreams(ctx)
+	streams, err := ListStreams(ctx, client.Streams())
 	require.NoError(t, err)
 	assert.NotEmpty(t, streams)
 

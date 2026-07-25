@@ -17,7 +17,12 @@ type Client interface {
 	Streams() StreamManager
 	Consumers() ConsumerManager
 	KV() KeyValueManager
+	KVKeys() KeyValueKeys
+	Objects() ObjectStoreManager
+	Monitoring() Monitoring
 	Replay() Replay
+	// PublishRaw publishes bytes with optional headers and returns the JetStream ack.
+	PublishRaw(ctx context.Context, subject string, data []byte, headers map[string]string) (*PubAck, error)
 	SetupWorker(ctx context.Context, setup WorkerSetup, handler MsgHandler) (Subscription, error)
 	SuperviseQueueSubscribeBound(ctx context.Context, stream, durable, queue, subject string, handler MsgHandler, cfg SupervisorConfig) (SupervisedSubscription, error)
 	SuperviseSubscribeBound(ctx context.Context, stream, durable, subject string, handler MsgHandler, cfg SupervisorConfig) (SupervisedSubscription, error)
@@ -93,6 +98,8 @@ func NewClient(ctx context.Context, cfg *Config) (Client, error) {
 	cl.streams = newStreamManager(js)
 	cl.consumers = newConsumerManager(nc, js)
 	cl.kv = newKeyValueManager(nc, js)
+	cl.objects = newObjectStoreManager(js)
+	cl.monitoring = newMonitoring(cfg.Conn.ConnectTimeout)
 	cl.replay = newReplay(cl.streams, cl.consumers)
 	cl.publisher = newPublisher(ctx, cfg.PublisherConfig, js, nc, cfg.Conn.ReconnectBufSize, cl.metrics, metricsCfg.AllowTracing)
 	cl.consumer = newConsumer(ctx, cfg.RuntimeConsumer, cfg.Backpressure, js, cl.metrics, metricsCfg.AllowTracing)
@@ -114,12 +121,19 @@ func NewClient(ctx context.Context, cfg *Config) (Client, error) {
 	return cl, nil
 }
 
-func (c *client) Consumer() Consumer         { return c.consumer }
-func (c *client) Publisher() Publisher       { return c.publisher }
-func (c *client) Requester() Requester       { return c.requester }
-func (c *client) Responder() Responder       { return c.responder }
-func (c *client) Connector() Connector       { return c }
-func (c *client) Streams() StreamManager     { return c.streams }
-func (c *client) Consumers() ConsumerManager { return c.consumers }
-func (c *client) KV() KeyValueManager        { return c.kv }
-func (c *client) Replay() Replay             { return c.replay }
+func (c *client) Consumer() Consumer          { return c.consumer }
+func (c *client) Publisher() Publisher        { return c.publisher }
+func (c *client) Requester() Requester        { return c.requester }
+func (c *client) Responder() Responder        { return c.responder }
+func (c *client) Connector() Connector        { return c }
+func (c *client) Streams() StreamManager      { return c.streams }
+func (c *client) Consumers() ConsumerManager  { return c.consumers }
+func (c *client) KV() KeyValueManager         { return c.kv }
+func (c *client) KVKeys() KeyValueKeys        { return c.kv }
+func (c *client) Objects() ObjectStoreManager { return c.objects }
+func (c *client) Monitoring() Monitoring      { return c.monitoring }
+func (c *client) Replay() Replay              { return c.replay }
+
+func (c *client) PublishRaw(ctx context.Context, subject string, data []byte, headers map[string]string) (*PubAck, error) {
+	return c.publisher.PublishRaw(ctx, subject, data, headers)
+}
