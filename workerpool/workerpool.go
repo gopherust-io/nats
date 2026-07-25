@@ -4,28 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"runtime"
 	"sync"
 	"sync/atomic"
 
+	_ "github.com/gopherust-io/tel"
 	"github.com/nats-io/nats.go"
 	"github.com/rs/zerolog"
 )
-
-func ensureDefaultLogger() {
-	if zerolog.DefaultContextLogger != nil {
-		return
-	}
-	l := zerolog.New(os.Stdout).With().Timestamp().Logger()
-	zerolog.DefaultContextLogger = &l
-}
-
-var _ = func() int {
-	ensureDefaultLogger()
-
-	return 0
-}()
 
 const (
 	stateRunning  uint32 = 1

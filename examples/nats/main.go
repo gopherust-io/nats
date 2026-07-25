@@ -30,8 +30,6 @@ func main() {
 	defer stop()
 
 	role := strings.ToLower(envOr("ROLE", "all"))
-	l := zerolog.New(os.Stdout).With().Timestamp().Logger()
-	zerolog.DefaultContextLogger = &l
 	log := zerolog.Ctx(ctx)
 
 	telem := mustTelemetry(ctx)

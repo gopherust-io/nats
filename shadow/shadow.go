@@ -4,25 +4,11 @@ import (
 	"context"
 	"fmt"
 	"math/rand/v2"
-	"os"
 
+	_ "github.com/gopherust-io/tel"
 	natspkg "github.com/nats-io/nats.go"
 	"github.com/rs/zerolog"
 )
-
-func ensureDefaultLogger() {
-	if zerolog.DefaultContextLogger != nil {
-		return
-	}
-	l := zerolog.New(os.Stdout).With().Timestamp().Logger()
-	zerolog.DefaultContextLogger = &l
-}
-
-var _ = func() int {
-	ensureDefaultLogger()
-
-	return 0
-}()
 
 // Handler is a message handler (same signature as nats.MsgHandler).
 type Handler func(ctx context.Context, msg *natspkg.Msg) error

@@ -22,6 +22,8 @@ func mustTelemetry(ctx context.Context) *tel.Telemetry {
 	}
 
 	cfg.MonitorConfig.Enable = false
+	cfg.LogEncode = "console"
+	cfg.LogLevel = "info"
 
 	telem := tel.NewWithConfig(cfg)
 	tel.SetGlobal(telem)

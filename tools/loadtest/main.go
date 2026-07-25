@@ -37,22 +37,19 @@ func main() {
 	)
 	flag.Parse()
 
-	l := zerolog.New(os.Stderr).With().Timestamp().Logger()
-	zerolog.DefaultContextLogger = &l
-
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	runCtx, cancel := context.WithTimeout(ctx, *duration)
 	defer cancel()
 
-	log := zerolog.Ctx(runCtx)
-
 	telem := tel.NewWithConfig(tel.DefaultDebugConfig())
 	_ = telem.Start(runCtx)
 	defer func() { _ = telem.Shutdown(context.Background()) }()
+	// Prefer stderr for the loadtest CLI after tel seeds the process logger.
+	tel.SetLogger(zerolog.New(os.Stderr).With().Timestamp().Logger())
 	runCtx = tel.WrapContext(runCtx, telem)
-	log = zerolog.Ctx(runCtx)
+	log := zerolog.Ctx(runCtx)
 
 	var cfg libnats.Config
 	if *metrics {
