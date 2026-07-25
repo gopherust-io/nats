@@ -164,3 +164,7 @@ make test
 | [API reference](docs/nats/api-reference.md) | Binding, middleware, presets |
 
 [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md)
+
+## License
+
+Apache License 2.0 — see [LICENSE](LICENSE).
