@@ -284,17 +284,19 @@ type BackpressureConfig struct {
 //
 // Zero-value JetStream enums (DeliverAll, ReplayInstant, AckNone) are valid;
 // set flags track whether an option explicitly chose a policy or start position.
+//
+// goalign:ignore
 type ReplayConfig struct {
-	OptStartTime   *time.Time
-	Durable        string // target durable for CreateReplayConsumer; ignored by ResetConsumer
-	FilterSubject  string
-	FilterSubjects []string
-	DeliverPolicy  DeliverPolicy
-	ReplayPolicy   ReplayPolicy
-	OptStartSeq    uint64
-	deliverSet     bool
-	replaySet      bool
-	optStartSeqSet bool
+	OptStartTime    *time.Time
+	Durable         string // target durable for CreateReplayConsumer; ignored by ResetConsumer
+	FilterSubject   string
+	FilterSubjects  []string
+	DeliverPolicy   DeliverPolicy
+	ReplayPolicy    ReplayPolicy
+	OptStartSeq     uint64
+	deliverSet      bool
+	replaySet       bool
+	optStartSeqSet  bool
 	optStartTimeSet bool
 }
 

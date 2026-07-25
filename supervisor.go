@@ -240,11 +240,7 @@ func (s *supervisedSubscription) emit(ev SupervisorEvent) {
 	if s.cfg.OnEvent != nil {
 		s.cfg.OnEvent(ev)
 	}
-
-	select {
-	case s.events <- ev:
-	default:
-	}
+	trySend(s.events, ev)
 }
 
 func (s *supervisedSubscription) Events() <-chan SupervisorEvent { return s.events }

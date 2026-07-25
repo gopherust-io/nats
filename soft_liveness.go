@@ -217,11 +217,7 @@ func (s *SoftLiveness) emit(ev SoftLivenessEvent) {
 	if s.cfg.OnStall != nil {
 		s.cfg.OnStall(ev)
 	}
-
-	select {
-	case s.events <- ev:
-	default:
-	}
+	trySend(s.events, ev)
 }
 
 // WatchSoftLiveness is a client helper that also hooks process-success on the shared consumer.

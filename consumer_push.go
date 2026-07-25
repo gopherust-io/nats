@@ -382,11 +382,7 @@ func (c *consumer) processMessage(ctx context.Context, msg *natspkg.Msg, handler
 }
 
 func (c *consumer) metricSubject(subject string) string {
-	if c.metrics != nil && c.metrics.fixedCardinality {
-		return empty
-	}
-
-	return subject
+	return metricSubjectLabel(c.metrics, subject)
 }
 
 func (c *consumer) recordProcessError(ctx context.Context, subject string, msg *natspkg.Msg, err error) {

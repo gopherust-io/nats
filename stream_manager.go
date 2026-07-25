@@ -201,25 +201,21 @@ func StreamNames(ctx context.Context, s StreamManager) ([]string, error) {
 func (s *streamManager) ListStreamsPage(_ context.Context, offset, limit int) ([]*natspkg.StreamInfo, int, error) {
 	names := s.streamNames()
 
-	total := len(names)
-	pageNames, _ := pageSlice(names, offset, limit)
-	infos := make([]*natspkg.StreamInfo, 0, len(pageNames))
+	return pageInfos(names, offset, limit,
+		func(name string) (*natspkg.StreamInfo, error) {
+			info, infoErr := s.js.StreamInfo(name)
+			if infoErr != nil {
+				if errors.Is(infoErr, natspkg.ErrStreamNotFound) {
+					return nil, infoErr
+				}
 
-	for _, name := range pageNames {
-		info, infoErr := s.js.StreamInfo(name)
-		if infoErr != nil {
-			// Concurrent create/delete (e.g. KV buckets) can race the name listing.
-			if errors.Is(infoErr, natspkg.ErrStreamNotFound) {
-				continue
+				return nil, fmt.Errorf("list streams: info %q: %w", name, infoErr)
 			}
 
-			return nil, total, fmt.Errorf("list streams: info %q: %w", name, infoErr)
-		}
-
-		infos = append(infos, info)
-	}
-
-	return infos, total, nil
+			return info, nil
+		},
+		func(err error) bool { return errors.Is(err, natspkg.ErrStreamNotFound) },
+	)
 }
 
 func (s *streamManager) PurgeStream(_ context.Context, name string, opts ...PurgeOpt) error {

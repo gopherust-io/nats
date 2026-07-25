@@ -24,3 +24,28 @@ func pageSlice[T any](items []T, offset, limit int) ([]T, int) {
 
 	return items[offset:end], total
 }
+
+// pageInfos pages names, fetches each info, and skips not-found races.
+func pageInfos[T any](
+	names []string,
+	offset, limit int,
+	fetch func(name string) (T, error),
+	isNotFound func(error) bool,
+) ([]T, int, error) {
+	total := len(names)
+	pageNames, _ := pageSlice(names, offset, limit)
+	infos := make([]T, 0, len(pageNames))
+	for _, name := range pageNames {
+		info, err := fetch(name)
+		if err != nil {
+			if isNotFound(err) {
+				continue
+			}
+
+			return nil, total, err
+		}
+		infos = append(infos, info)
+	}
+
+	return infos, total, nil
+}

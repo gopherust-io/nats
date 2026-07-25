@@ -178,6 +178,7 @@ func (m *objectStoreManager) ListObjects(_ context.Context, bucket string, offse
 	infos, err := os.List()
 	if errors.Is(err, natspkg.ErrNoObjectsFound) {
 		page, total := pageSlice([]string{}, offset, limit)
+
 		return page, total, nil
 	}
 	if err != nil {
