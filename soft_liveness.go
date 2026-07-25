@@ -3,10 +3,11 @@ package nats
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/rs/zerolog"
 )
 
 const (
@@ -199,9 +200,10 @@ func (s *SoftLiveness) loop(ctx context.Context) {
 				s.metrics.consumerStall.Add(ctx, 1)
 			}
 
-			slog.WarnContext(ctx, "soft liveness stall",
-				slog.Uint64("num_pending", pending),
-				slog.Duration("stalled_for", idle))
+			zerolog.Ctx(ctx).Warn().
+				Uint64("num_pending", pending).
+				Dur("stalled_for", idle).
+				Msg("soft liveness stall")
 
 			if s.cfg.CircuitStop {
 				return
@@ -217,11 +219,7 @@ func (s *SoftLiveness) emit(ev SoftLivenessEvent) {
 	if s.cfg.OnStall != nil {
 		s.cfg.OnStall(ev)
 	}
-
-	select {
-	case s.events <- ev:
-	default:
-	}
+	trySend(s.events, ev)
 }
 
 // WatchSoftLiveness is a client helper that also hooks process-success on the shared consumer.

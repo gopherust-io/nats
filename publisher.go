@@ -2,7 +2,6 @@ package nats
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -92,19 +91,7 @@ func (p *publisher) guardConnected() error {
 }
 
 func (p *publisher) validateSubject(subject string) error {
-	if p.skipSubjectValidation {
-		return nil
-	}
-
-	if err := ValidatePublishSubject(subject); err != nil {
-		if errors.Is(err, ErrInvalidSubject) && subject == empty {
-			return fmt.Errorf("publish subject=%q: %w", subject, ErrEmptySubjectNotAllowed)
-		}
-
-		return fmt.Errorf("publish subject=%q: %w", subject, err)
-	}
-
-	return nil
+	return validateOutboundSubject(subject, "publish", p.skipSubjectValidation)
 }
 
 type preparedPublish struct {
@@ -372,55 +359,30 @@ func (p *publisher) PublishAsyncBytes(ctx context.Context, subject string, data 
 }
 
 func (p *publisher) metricSubject(subject string) string {
-	if p.metrics != nil && p.metrics.fixedCardinality {
-		return empty
-	}
-
-	return subject
+	return metricSubjectLabel(p.metrics, subject)
 }
 
 func (p *publisher) recordError(ctx context.Context, subject string) {
-	if !p.allowMetrics || p.metrics == nil || p.metrics.publishErrors == nil {
+	if !p.allowMetrics || p.metrics == nil {
 		return
 	}
-
-	p.metrics.publishErrors.AddWith(ctx, 1, p.metricSubject(subject))
+	p.metrics.addCounter(ctx, p.metrics.publishErrors, subject)
 }
 
 func (p *publisher) recordSuccess(ctx context.Context, subject string, bytes int, elapsed time.Duration) {
 	if !p.allowMetrics || p.metrics == nil {
 		return
 	}
-
-	label := p.metricSubject(subject)
-
-	if p.metrics.publishTotal != nil {
-		p.metrics.publishTotal.AddWith(ctx, 1, label)
-	}
-
-	if p.metrics.publishBytes != nil {
-		p.metrics.publishBytes.RecordWith(ctx, float64(bytes), label)
-	}
-
-	if p.metrics.publishLatency != nil {
-		p.metrics.publishLatency.RecordWith(ctx, elapsed.Seconds(), label)
-	}
+	p.metrics.addCounter(ctx, p.metrics.publishTotal, subject)
+	p.metrics.recordBytesLatency(ctx, p.metrics.publishBytes, p.metrics.publishLatency, subject, bytes, elapsed)
 }
 
 func (p *publisher) recordAsyncAccepted(ctx context.Context, subject string, bytes int) {
 	if !p.allowMetrics || p.metrics == nil {
 		return
 	}
-
-	label := p.metricSubject(subject)
-
-	if p.metrics.publishTotal != nil {
-		p.metrics.publishTotal.AddWith(ctx, 1, label)
-	}
-
-	if p.metrics.publishBytes != nil {
-		p.metrics.publishBytes.RecordWith(ctx, float64(bytes), label)
-	}
+	p.metrics.addCounter(ctx, p.metrics.publishTotal, subject)
+	p.metrics.recordBytesLatency(ctx, p.metrics.publishBytes, nil, subject, bytes, 0)
 }
 
 // PublishAsyncComplete waits until all outstanding async publishes have completed

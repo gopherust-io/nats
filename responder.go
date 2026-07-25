@@ -95,26 +95,18 @@ func (r *responder) wrap(parent context.Context, handler MsgHandler) natspkg.Msg
 	}
 }
 
-func (r *responder) metricSubject(subject string) string {
-	if r.metrics != nil && r.metrics.fixedCardinality {
-		return empty
-	}
-
-	return subject
-}
-
 func (r *responder) recordHandled(ctx context.Context, subject string) {
-	if !r.allowMetrics || r.metrics == nil || r.metrics.replyHandled == nil {
+	if !r.allowMetrics || r.metrics == nil {
 		return
 	}
-	r.metrics.replyHandled.AddWith(ctx, 1, r.metricSubject(subject))
+	r.metrics.addCounter(ctx, r.metrics.replyHandled, subject)
 }
 
 func (r *responder) recordError(ctx context.Context, subject string) {
-	if !r.allowMetrics || r.metrics == nil || r.metrics.replyErrors == nil {
+	if !r.allowMetrics || r.metrics == nil {
 		return
 	}
-	r.metrics.replyErrors.AddWith(ctx, 1, r.metricSubject(subject))
+	r.metrics.addCounter(ctx, r.metrics.replyErrors, subject)
 }
 
 // RespondBytes replies with raw bytes.

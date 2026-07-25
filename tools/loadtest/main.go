@@ -11,7 +11,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"log"
 	"os"
 	"os/signal"
 	"runtime"
@@ -22,6 +21,7 @@ import (
 	libnats "github.com/gopherust-io/nats"
 	"github.com/gopherust-io/tel"
 	natspkg "github.com/nats-io/nats.go"
+	"github.com/rs/zerolog"
 )
 
 func main() {
@@ -46,7 +46,10 @@ func main() {
 	telem := tel.NewWithConfig(tel.DefaultDebugConfig())
 	_ = telem.Start(runCtx)
 	defer func() { _ = telem.Shutdown(context.Background()) }()
+	// Prefer stderr for the loadtest CLI after tel seeds the process logger.
+	tel.SetLogger(zerolog.New(os.Stderr).With().Timestamp().Logger())
 	runCtx = tel.WrapContext(runCtx, telem)
+	log := zerolog.Ctx(runCtx)
 
 	var cfg libnats.Config
 	if *metrics {
@@ -65,12 +68,12 @@ func main() {
 
 	client, err := libnats.NewClient(runCtx, &cfg)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal().Err(err).Msg("nats client")
 	}
 	defer func() { _ = client.Connector().Shutdown() }()
 
 	if _, err := client.Streams().CreateOrUpdateStream(runCtx, cfg.Stream); err != nil {
-		log.Fatal(err)
+		log.Fatal().Err(err).Msg("create stream")
 	}
 
 	var consumed atomic.Int64
@@ -87,12 +90,12 @@ func main() {
 		if _, err := client.Consumers().CreateOrUpdateConsumer(runCtx, "LOAD", libnats.DurableConsumerConfig{
 			Durable: "load-pull", FilterSubject: "load.>", MaxAckPending: 2000, MaxWaiting: 512,
 		}); err != nil {
-			log.Fatal(err)
+			log.Fatal().Err(err).Msg("create pull consumer")
 		}
 		go func() {
 			pull, err := client.Consumer().Pull("LOAD", "load-pull")
 			if err != nil {
-				log.Print(err)
+				zerolog.Ctx(runCtx).Error().Err(err).Msg("pull consumer")
 				return
 			}
 			_ = pull.Process(runCtx, handler,
@@ -103,7 +106,7 @@ func main() {
 		}()
 	default:
 		if _, err := client.Consumer().QueueSubscribeBound(runCtx, "LOAD", "load-proc", "load-q", "load.>", handler); err != nil {
-			log.Fatal(err)
+			log.Fatal().Err(err).Msg("queue subscribe")
 		}
 	}
 

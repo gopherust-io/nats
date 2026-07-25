@@ -4,11 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"sync"
 	"time"
 
 	natspkg "github.com/nats-io/nats.go"
+	"github.com/rs/zerolog"
 )
 
 const (
@@ -200,9 +200,10 @@ func (s *supervisedSubscription) loop(ctx context.Context, subscribe SubscribeFn
 
 			newSub, err := subscribe(ctx)
 			if err != nil {
-				slog.WarnContext(ctx, "supervisor resubscribe failed",
-					slog.Int("attempt", attempts),
-					slog.String("err", err.Error()))
+				zerolog.Ctx(ctx).Warn().
+					Int("attempt", attempts).
+					Err(err).
+					Msg("supervisor resubscribe failed")
 				backoff = nextBackoff(backoff, s.cfg.MaxBackoff)
 
 				continue
@@ -240,11 +241,7 @@ func (s *supervisedSubscription) emit(ev SupervisorEvent) {
 	if s.cfg.OnEvent != nil {
 		s.cfg.OnEvent(ev)
 	}
-
-	select {
-	case s.events <- ev:
-	default:
-	}
+	trySend(s.events, ev)
 }
 
 func (s *supervisedSubscription) Events() <-chan SupervisorEvent { return s.events }

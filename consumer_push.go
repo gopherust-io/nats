@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	natspkg "github.com/nats-io/nats.go"
+	"github.com/rs/zerolog"
 
 	"github.com/gopherust-io/nats/workerpool"
 )
@@ -253,9 +253,10 @@ func (c *consumer) applyPendingLimits(sub *natspkg.Subscription, subject string,
 	if limit > 0 || buf > 0 {
 		err := sub.SetPendingLimits(limit, buf)
 		if err != nil {
-			slog.ErrorContext(ctx, "set pending limits",
-				slog.String("subject", subject),
-				slog.String("err", err.Error()))
+			zerolog.Ctx(ctx).Error().
+				Str("subject", subject).
+				Err(err).
+				Msg("set pending limits")
 		}
 	}
 }
@@ -368,7 +369,7 @@ func (c *consumer) processMessage(ctx context.Context, msg *natspkg.Msg, handler
 
 	ackErr := msg.Ack()
 	if ackErr != nil {
-		slog.ErrorContext(ctx, "ack message", slog.String("err", ackErr.Error()))
+		zerolog.Ctx(ctx).Error().Err(ackErr).Msg("ack message")
 
 		return fmt.Errorf("ack message subject=%q: %w", subject, ackErr)
 	}
@@ -382,11 +383,7 @@ func (c *consumer) processMessage(ctx context.Context, msg *natspkg.Msg, handler
 }
 
 func (c *consumer) metricSubject(subject string) string {
-	if c.metrics != nil && c.metrics.fixedCardinality {
-		return empty
-	}
-
-	return subject
+	return metricSubjectLabel(c.metrics, subject)
 }
 
 func (c *consumer) recordProcessError(ctx context.Context, subject string, msg *natspkg.Msg, err error) {
@@ -401,13 +398,14 @@ func (c *consumer) recordProcessError(ctx context.Context, subject string, msg *
 		}
 	}
 
-	slog.ErrorContext(ctx, "process message",
-		slog.String("subject", subject),
-		slog.String("err", err.Error()))
+	zerolog.Ctx(ctx).Error().
+		Str("subject", subject).
+		Err(err).
+		Msg("process message")
 
 	nakErr := msg.Nak()
 	if nakErr != nil {
-		slog.ErrorContext(ctx, "nak message", slog.String("err", nakErr.Error()))
+		zerolog.Ctx(ctx).Error().Err(nakErr).Msg("nak message")
 	}
 }
 

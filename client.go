@@ -3,9 +3,9 @@ package nats
 import (
 	"context"
 	"fmt"
-	"log/slog"
 
 	natspkg "github.com/nats-io/nats.go"
+	"github.com/rs/zerolog"
 )
 
 type Client interface {
@@ -46,7 +46,7 @@ func NewClient(ctx context.Context, cfg *Config) (Client, error) {
 	}
 
 	if cfg.Conn.TLS.InsecureSkipVerify {
-		slog.WarnContext(ctx, "NATS TLS InsecureSkipVerify enabled; server certificate will not be verified")
+		zerolog.Ctx(ctx).Warn().Msg("NATS TLS InsecureSkipVerify enabled; server certificate will not be verified")
 	}
 
 	cl := &client{config: cfg}

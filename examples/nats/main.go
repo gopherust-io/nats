@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"os"
 	"os/signal"
 	"strings"
@@ -12,6 +11,7 @@ import (
 
 	libnats "github.com/gopherust-io/nats"
 	"github.com/gopherust-io/tel"
+	"github.com/rs/zerolog"
 )
 
 const (
@@ -30,17 +30,18 @@ func main() {
 	defer stop()
 
 	role := strings.ToLower(envOr("ROLE", "all"))
-	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})))
+	log := zerolog.Ctx(ctx)
 
 	telem := mustTelemetry(ctx)
 	defer func() {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		if err := telem.Shutdown(shutdownCtx); err != nil {
-			slog.Error("telemetry shutdown", "err", err)
+			zerolog.Ctx(shutdownCtx).Error().Err(err).Msg("telemetry shutdown")
 		}
 	}()
 	ctx = tel.WrapContext(ctx, telem)
+	log = zerolog.Ctx(ctx)
 
 	if cache := telem.Registry().AttrCache(); cache != nil {
 		for _, s := range []string{publishSubject, subjectFilter, dlqSubject} {
@@ -51,52 +52,56 @@ func main() {
 	cfg := buildConfigForRole(role)
 	client, err := libnats.NewClient(ctx, &cfg)
 	if err != nil {
-		slog.Error("nats client", "err", err)
+		log.Error().Err(err).Msg("nats client")
 		os.Exit(1)
 	}
 	defer func() {
 		if err := client.Connector().Shutdown(); err != nil {
-			slog.Error("nats shutdown", "err", err)
+			log.Error().Err(err).Msg("nats shutdown")
 		}
 	}()
 
 	if err := ensureTopology(ctx, client); err != nil {
-		slog.Error("ensure topology", "err", err)
+		log.Error().Err(err).Msg("ensure topology")
 		os.Exit(1)
 	}
 
-	slog.Info("nats orders example started",
-		"role", role,
-		"nats_url", cfg.Conn.Address,
-		"service", telem.Config().Service)
+	log.Info().
+		Str("role", role).
+		Str("nats_url", cfg.Conn.Address).
+		Str("service", telem.Config().Service).
+		Msg("nats orders example started")
 
 	switch role {
 	case "publisher":
 		runPublisher(ctx, client)
 	case "worker":
 		if err := runWorker(ctx, client, telem); err != nil {
-			slog.Error("worker", "err", err)
+			log.Error().Err(err).Msg("worker")
 			os.Exit(1)
 		}
 		<-ctx.Done()
 	case "puller":
 		if err := runPuller(ctx, client, telem); err != nil && ctx.Err() == nil {
-			slog.Error("puller", "err", err)
+			log.Error().Err(err).Msg("puller")
 			os.Exit(1)
 		}
 	case "all":
 		go runPublisher(ctx, client)
 		if err := runWorker(ctx, client, telem); err != nil {
-			slog.Error("worker", "err", err)
+			log.Error().Err(err).Msg("worker")
 			os.Exit(1)
 		}
 		<-ctx.Done()
 	default:
-		slog.Error("unknown ROLE", "role", role, "want", "all|publisher|worker|puller")
+		log.Error().
+			Str("role", role).
+			Str("want", "all|publisher|worker|puller").
+			Msg("unknown ROLE")
 		os.Exit(1)
 	}
 
-	slog.Info("shutting down")
+	log.Info().Msg("shutting down")
 }
 
 func buildConfigForRole(role string) libnats.Config {

@@ -4,9 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"strings"
 	"time"
+
+	"github.com/rs/zerolog"
 
 	libnats "github.com/gopherust-io/nats"
 )
@@ -17,12 +18,15 @@ func runPublisher(ctx context.Context, client libnats.Client) {
 
 	codec := strings.ToLower(envOr("CODEC", "json"))
 	i := 0
-	slog.Info("publisher started", "subject", publishSubject, "codec", codec)
+	zerolog.Ctx(ctx).Info().
+		Str("subject", publishSubject).
+		Str("codec", codec).
+		Msg("publisher started")
 
 	for {
 		select {
 		case <-ctx.Done():
-			slog.Info("publisher stopped")
+			zerolog.Ctx(ctx).Info().Msg("publisher stopped")
 			return
 		case <-ticker.C:
 			i++
@@ -37,7 +41,7 @@ func runPublisher(ctx context.Context, client libnats.Client) {
 			case "raw", "bytes":
 				raw, mErr := json.Marshal(payload)
 				if mErr != nil {
-					slog.Error("marshal", "err", mErr)
+					zerolog.Ctx(ctx).Error().Err(mErr).Msg("marshal")
 					continue
 				}
 				err = client.Publisher().PublishBytesWithMsgID(ctx, publishSubject, msgID, raw)
@@ -48,10 +52,18 @@ func runPublisher(ctx context.Context, client libnats.Client) {
 				})
 			}
 			if err != nil {
-				slog.Error("publish failed", "msg_id", msgID, "err", err)
+				zerolog.Ctx(ctx).Error().
+					Str("msg_id", msgID).
+					Err(err).
+					Msg("publish failed")
 				continue
 			}
-			slog.Info("published", "subject", publishSubject, "msg_id", msgID, "order_id", i, "codec", codec)
+			zerolog.Ctx(ctx).Info().
+				Str("subject", publishSubject).
+				Str("msg_id", msgID).
+				Int("order_id", i).
+				Str("codec", codec).
+				Msg("published")
 		}
 	}
 }

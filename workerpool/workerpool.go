@@ -4,12 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"runtime"
 	"sync"
 	"sync/atomic"
 
+	_ "github.com/gopherust-io/tel"
 	"github.com/nats-io/nats.go"
+	"github.com/rs/zerolog"
 )
 
 const (
@@ -54,12 +55,16 @@ type WorkerPool struct {
 
 func New(ctx context.Context, workerPoolLen, messageBufLen int, registerFn msgFn) *WorkerPool {
 	if workerPoolLen < 1 {
-		slog.Warn("worker pool size must be >= 1, defaulting to 1", slog.Int("requested", workerPoolLen))
+		zerolog.Ctx(ctx).Warn().
+			Int("requested", workerPoolLen).
+			Msg("worker pool size must be >= 1, defaulting to 1")
 		workerPoolLen = 1
 	}
 
 	if messageBufLen < 0 {
-		slog.Warn("worker buffer size must be >= 0, defaulting to 0", slog.Int("requested", messageBufLen))
+		zerolog.Ctx(ctx).Warn().
+			Int("requested", messageBufLen).
+			Msg("worker buffer size must be >= 0, defaulting to 0")
 		messageBufLen = 0
 	}
 
@@ -80,7 +85,7 @@ func New(ctx context.Context, workerPoolLen, messageBufLen int, registerFn msgFn
 }
 
 func (w *WorkerPool) Consume() {
-	slog.InfoContext(w.ctx, "starting worker pool")
+	zerolog.Ctx(w.ctx).Info().Msg("starting worker pool")
 
 	for range w.len {
 		w.wg.Add(1)
@@ -135,10 +140,10 @@ func (w *WorkerPool) process(t *task) {
 	}
 
 	if err != nil {
-		slog.ErrorContext(w.ctx, "worker pool runner",
-			slog.String("subject", t.msg.Subject),
-			slog.String("err", err.Error()),
-		)
+		zerolog.Ctx(w.ctx).Error().
+			Str("subject", t.msg.Subject).
+			Err(err).
+			Msg("worker pool runner")
 	}
 
 	t.ctx = nil
@@ -151,7 +156,7 @@ func (w *WorkerPool) process(t *task) {
 func (w *WorkerPool) Publish(ctx context.Context, msg *nats.Msg, applyFn bool, processFn msgFn) {
 	_, err := w.tryPublish(ctx, msg, applyFn, processFn, false)
 	if err != nil {
-		slog.ErrorContext(ctx, "worker pool publish", slog.String("err", err.Error()))
+		zerolog.Ctx(ctx).Error().Err(err).Msg("worker pool publish")
 	}
 }
 
@@ -235,7 +240,7 @@ func (w *WorkerPool) GracefulStop() {
 		return
 	}
 
-	slog.InfoContext(w.ctx, "shutdown worker pool")
+	zerolog.Ctx(w.ctx).Info().Msg("shutdown worker pool")
 
 	// Reject new publishes (state=draining) and unblock senders waiting on a full buffer.
 	// Workers drain remaining tasks; do not close input (avoids send-on-closed races).

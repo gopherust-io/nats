@@ -172,6 +172,7 @@ linters:
           - gocritic
       - path: supervisor\.go
         linters:
+          - contextcheck
           - cyclop
           - gocognit
           - gocyclo

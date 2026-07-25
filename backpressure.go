@@ -3,9 +3,9 @@ package nats
 import (
 	"context"
 	"fmt"
-	"log/slog"
 
 	natspkg "github.com/nats-io/nats.go"
+	"github.com/rs/zerolog"
 )
 
 func (c *consumer) handlePoolBackpressure(ctx context.Context, msg *natspkg.Msg) error {
@@ -57,8 +57,9 @@ func (c *consumer) handlePoolBackpressure(ctx context.Context, msg *natspkg.Msg)
 			c.metrics.slowConsumerEvents.Add(ctx, 1)
 		}
 
-		slog.WarnContext(ctx, "dropping message due to backpressure",
-			slog.String("subject", msg.Subject))
+		zerolog.Ctx(ctx).Warn().
+			Str("subject", msg.Subject).
+			Msg("dropping message due to backpressure")
 
 		return ErrBackpressureHandled
 	default:

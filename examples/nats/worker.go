@@ -4,11 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"os"
 	"time"
 
 	natspkg "github.com/nats-io/nats.go"
+	"github.com/rs/zerolog"
 
 	libnats "github.com/gopherust-io/nats"
 	"github.com/gopherust-io/tel"
@@ -35,22 +35,26 @@ func runWorker(ctx context.Context, client libnats.Client, telem *tel.Telemetry)
 		var ev orderEvent
 		if err := json.Unmarshal(msg.Data, &ev); err != nil {
 			failed.Add(msgCtx, 1)
-			slog.Error("decode order", "err", err)
+			zerolog.Ctx(msgCtx).Error().Err(err).Msg("decode order")
 
 			return fmt.Errorf("decode: %w", libnats.ErrSendToDLQ)
 		}
 
 		if ev.ID > 0 && ev.ID%17 == 0 {
 			failed.Add(msgCtx, 1)
-			slog.Warn("poison order routed to dlq", "order_id", ev.ID, "subject", msg.Subject)
+			zerolog.Ctx(msgCtx).Warn().
+				Int("order_id", ev.ID).
+				Str("subject", msg.Subject).
+				Msg("poison order routed to dlq")
 
 			return fmt.Errorf("simulated poison order_id=%d: %w", ev.ID, libnats.ErrSendToDLQ)
 		}
 
-		slog.Info("processed order",
-			"order_id", ev.ID,
-			"subject", msg.Subject,
-			"msg_id", msg.Header.Get(libnats.HeaderMsgID))
+		zerolog.Ctx(msgCtx).Info().
+			Int("order_id", ev.ID).
+			Str("subject", msg.Subject).
+			Str("msg_id", msg.Header.Get(libnats.HeaderMsgID)).
+			Msg("processed order")
 		processed.Add(msgCtx, 1)
 
 		return nil
@@ -111,21 +115,24 @@ func runWorker(ctx context.Context, client libnats.Client, telem *tel.Telemetry)
 		<-ctx.Done()
 		live.Stop()
 		_ = sub.Stop()
-		dumpFlightRecorder(rec)
+		dumpFlightRecorder(ctx, rec)
 	}()
 
-	slog.Info("worker started",
-		"stream", streamName,
-		"durable", durableName,
-		"queue", queueName)
+	zerolog.Ctx(ctx).Info().
+		Str("stream", streamName).
+		Str("durable", durableName).
+		Str("queue", queueName).
+		Msg("worker started")
 
 	return nil
 }
 
-func dumpFlightRecorder(rec *libnats.FlightRecorder) {
+func dumpFlightRecorder(ctx context.Context, rec *libnats.FlightRecorder) {
 	if rec == nil || len(rec.Snapshot()) == 0 {
 		return
 	}
-	slog.Warn("flight recorder dump on shutdown", "incidents", len(rec.Snapshot()))
+	zerolog.Ctx(ctx).Warn().
+		Int("incidents", len(rec.Snapshot())).
+		Msg("flight recorder dump on shutdown")
 	_ = rec.WriteJSON(os.Stderr)
 }

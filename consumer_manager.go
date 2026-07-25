@@ -236,24 +236,21 @@ func (m *consumerManager) ListConsumersPage(ctx context.Context, stream string, 
 		return nil, 0, err
 	}
 
-	total := len(names)
-	pageNames, _ := pageSlice(names, offset, limit)
-	infos := make([]*natspkg.ConsumerInfo, 0, len(pageNames))
+	return pageInfos(names, offset, limit,
+		func(name string) (*natspkg.ConsumerInfo, error) {
+			info, infoErr := m.js.ConsumerInfo(stream, name)
+			if infoErr != nil {
+				if errors.Is(infoErr, natspkg.ErrConsumerNotFound) {
+					return nil, infoErr
+				}
 
-	for _, name := range pageNames {
-		info, infoErr := m.js.ConsumerInfo(stream, name)
-		if infoErr != nil {
-			if errors.Is(infoErr, natspkg.ErrConsumerNotFound) {
-				continue
+				return nil, fmt.Errorf("list consumers stream=%q name=%q: %w", stream, name, infoErr)
 			}
 
-			return nil, total, fmt.Errorf("list consumers stream=%q name=%q: %w", stream, name, infoErr)
-		}
-
-		infos = append(infos, info)
-	}
-
-	return infos, total, nil
+			return info, nil
+		},
+		func(err error) bool { return errors.Is(err, natspkg.ErrConsumerNotFound) },
+	)
 }
 
 func (m *consumerManager) PauseConsumer(ctx context.Context, stream, durable string, pauseUntil time.Time) error {

@@ -2,7 +2,6 @@ package nats
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -52,19 +51,7 @@ func newRequester(cfg RequesterConfig, conn *natspkg.Conn, metrics *clientMetric
 }
 
 func (r *requester) validateSubject(subject string) error {
-	if r.skipSubjectValidation {
-		return nil
-	}
-
-	if err := ValidatePublishSubject(subject); err != nil {
-		if errors.Is(err, ErrInvalidSubject) && subject == empty {
-			return fmt.Errorf("request subject=%q: %w", subject, ErrEmptySubjectNotAllowed)
-		}
-
-		return fmt.Errorf("request subject=%q: %w", subject, err)
-	}
-
-	return nil
+	return validateOutboundSubject(subject, "request", r.skipSubjectValidation)
 }
 
 func (r *requester) withTimeout(ctx context.Context) (context.Context, context.CancelFunc) {
@@ -75,12 +62,19 @@ func (r *requester) withTimeout(ctx context.Context) (context.Context, context.C
 	return context.WithTimeout(ctx, r.timeout)
 }
 
-func (r *requester) metricSubject(subject string) string {
-	if r.metrics != nil && r.metrics.fixedCardinality {
-		return empty
+func (r *requester) recordSuccess(ctx context.Context, subject string, nbytes int, elapsed time.Duration) {
+	if !r.allowMetrics || r.metrics == nil {
+		return
 	}
+	r.metrics.addCounter(ctx, r.metrics.requestTotal, subject)
+	r.metrics.recordBytesLatency(ctx, r.metrics.requestBytes, r.metrics.requestLatency, subject, nbytes, elapsed)
+}
 
-	return subject
+func (r *requester) recordError(ctx context.Context, subject string) {
+	if !r.allowMetrics || r.metrics == nil {
+		return
+	}
+	r.metrics.addCounter(ctx, r.metrics.requestErrors, subject)
 }
 
 func (r *requester) RequestBytes(ctx context.Context, subject string, data []byte) (*natspkg.Msg, error) {
@@ -190,30 +184,4 @@ func (r *requester) RequestMessage(ctx context.Context, subject string, msg Mess
 	}
 
 	return reply, nil
-}
-
-func (r *requester) recordSuccess(ctx context.Context, subject string, nbytes int, elapsed time.Duration) {
-	if !r.allowMetrics || r.metrics == nil {
-		return
-	}
-
-	label := r.metricSubject(subject)
-
-	if r.metrics.requestTotal != nil {
-		r.metrics.requestTotal.AddWith(ctx, 1, label)
-	}
-	if r.metrics.requestBytes != nil {
-		r.metrics.requestBytes.RecordWith(ctx, float64(nbytes), label)
-	}
-	if r.metrics.requestLatency != nil {
-		r.metrics.requestLatency.RecordWith(ctx, elapsed.Seconds(), label)
-	}
-}
-
-func (r *requester) recordError(ctx context.Context, subject string) {
-	if !r.allowMetrics || r.metrics == nil || r.metrics.requestErrors == nil {
-		return
-	}
-
-	r.metrics.requestErrors.AddWith(ctx, 1, r.metricSubject(subject))
 }

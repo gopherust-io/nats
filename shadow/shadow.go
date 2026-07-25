@@ -3,10 +3,11 @@ package shadow
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"math/rand/v2"
 
+	_ "github.com/gopherust-io/tel"
 	natspkg "github.com/nats-io/nats.go"
+	"github.com/rs/zerolog"
 )
 
 // Handler is a message handler (same signature as nats.MsgHandler).
@@ -103,7 +104,7 @@ func run(ctx context.Context, shadow Handler, msg *natspkg.Msg) (err error) {
 	defer func() {
 		if rec := recover(); rec != nil {
 			err = fmt.Errorf("shadow panic: %v", rec)
-			slog.ErrorContext(ctx, "shadow handler panic", slog.Any("panic", rec))
+			zerolog.Ctx(ctx).Error().Any("panic", rec).Msg("shadow handler panic")
 		}
 	}()
 
