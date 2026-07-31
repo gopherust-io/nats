@@ -45,6 +45,7 @@ type consumer struct {
 	depthStop   chan struct{}
 
 	activityListeners atomic.Pointer[[]func()]
+	handledListeners  atomic.Pointer[[]func(time.Duration)]
 	cfg               RuntimeConsumerConfig
 	backpressure      BackpressureConfig
 	poolOnce          sync.Once
@@ -81,6 +82,40 @@ func (c *consumer) notifyProcessSuccess() {
 
 	for _, fn := range *listeners {
 		fn()
+	}
+}
+
+// OnMessageHandled registers a callback invoked after every handler completion
+// (success or error) with the handler elapsed duration.
+func (c *consumer) OnMessageHandled(fn func(elapsed time.Duration)) {
+	if c == nil || fn == nil {
+		return
+	}
+
+	for {
+		old := c.handledListeners.Load()
+		var next []func(time.Duration)
+		if old != nil {
+			next = make([]func(time.Duration), 0, len(*old)+1)
+			next = append(next, (*old)...)
+		} else {
+			next = make([]func(time.Duration), 0, 1)
+		}
+		next = append(next, fn)
+		if c.handledListeners.CompareAndSwap(old, &next) {
+			return
+		}
+	}
+}
+
+func (c *consumer) notifyMessageHandled(elapsed time.Duration) {
+	listeners := c.handledListeners.Load()
+	if listeners == nil {
+		return
+	}
+
+	for _, fn := range *listeners {
+		fn(elapsed)
 	}
 }
 
@@ -342,14 +377,18 @@ func (c *consumer) processMessage(ctx context.Context, msg *natspkg.Msg, handler
 	defer endSpanPtr(span, &handlerErr)
 
 	start := c.recordMessageMetrics(spanCtx, msg, meta)
+	if start == 0 {
+		start = time.Now().UnixNano()
+	}
 
 	err := handler(spanCtx, msg)
 	handlerErr = err
 
-	if c.metrics != nil && c.metrics.handlingTime != nil && start != 0 {
-		elapsed := float64(time.Now().UnixNano()-start) / float64(time.Second)
-		c.metrics.handlingTime.RecordWith(spanCtx, elapsed, c.metricSubject(subject))
+	elapsed := time.Duration(time.Now().UnixNano() - start)
+	if c.metrics != nil && c.metrics.handlingTime != nil {
+		c.metrics.handlingTime.RecordWith(spanCtx, elapsed.Seconds(), c.metricSubject(subject))
 	}
+	c.notifyMessageHandled(elapsed)
 
 	if errors.Is(err, ErrDLQRouted) {
 		handlerErr = nil

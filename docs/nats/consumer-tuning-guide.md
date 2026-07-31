@@ -165,6 +165,8 @@ Enable metrics (`AllowMetrics: true`) and watch these in [`nats/metrics.go`](../
 | `worker_queue_depth` | Pool saturation — if near `WorkerBufferSize`, increase pool or switch to `BackpressureNak` |
 | `slow_consumer_events` | NATS client is falling behind — reduce in-flight or increase processing capacity |
 | `consumer_stall` | Backlog growing without successful processing (use `WatchSoftLiveness` for queue groups) |
+| `slow_consumer_detected` | Sustained pending / lag / ack-pending ratio breach (`WatchSlowConsumer`) |
+| `behavior_fingerprint_anomaly` | Throughput near baseline but handling latency ≥ factor × learned normal (`WatchBehaviorFingerprint`) |
 | `idle_heartbeat_misses` | Push subscription went stale — wrap with `Supervise*` |
 | `fetch_batch_size` / `fetch_wait_seconds` | Pull efficiency — tune batch vs timeout |
 | ack/nak/redelivery counters | Handler errors or `AckWait` too short |
@@ -247,7 +249,7 @@ Follow this loop each time you tune further:
 3. **Right-size the pool** — start at `GOMAXPROCS`, watch `worker_queue_depth`
 4. **Set backpressure mode** — `Nak` for job queues, `Block` for critical paths
 5. **Align server + client** — `DurableConsumerConfig` and `RuntimeConsumerConfig` should agree on `AckWait`, `MaxAckPending`
-6. **Add supervision** — `SuperviseQueueSubscribeBound` + `WatchSoftLiveness` for production queue groups
+6. **Add supervision** — `SuperviseQueueSubscribeBound` + `WatchSoftLiveness` + `WatchBehaviorFingerprint` for production queue groups
 7. **Scale out** — queue group replicas (push) or multiple pullers (pull) before further config tweaks
 8. **Shard if needed** — subject sharding when single-stream throughput hits ceiling
 

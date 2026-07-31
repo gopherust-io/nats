@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/gopherust-io/nats/internal/bytesconv"
 	natspkg "github.com/nats-io/nats.go"
 	"github.com/rs/zerolog"
 )
@@ -11,7 +12,7 @@ import (
 // consumerFilterSubject resolves the pull-subscribe subject from consumer config.
 // When multiple filter subjects share a prefix, a wildcard subject is derived.
 func consumerFilterSubject(cfg natspkg.ConsumerConfig) string {
-	if cfg.FilterSubject != "" {
+	if !bytesconv.IsEmpty(cfg.FilterSubject) {
 		return cfg.FilterSubject
 	}
 
@@ -25,7 +26,7 @@ func consumerFilterSubjects(subjects []string) string {
 	case 1:
 		return subjects[0]
 	default:
-		if wild := commonWildcardSubject(subjects); wild != "" {
+		if wild := commonWildcardSubject(subjects); !bytesconv.IsEmpty(wild) {
 			return wild
 		}
 
@@ -46,7 +47,7 @@ func commonWildcardSubject(subjects []string) string {
 	prefix := subjects[0]
 	for _, s := range subjects[1:] {
 		prefix = commonPrefix(prefix, s)
-		if prefix == "" {
+		if bytesconv.IsEmpty(prefix) {
 			return ""
 		}
 	}
@@ -55,7 +56,7 @@ func commonWildcardSubject(subjects []string) string {
 		return prefix[:i+1] + ">"
 	}
 
-	if prefix != "" && !strings.HasSuffix(prefix, ">") {
+	if !bytesconv.IsEmpty(prefix) && !strings.HasSuffix(prefix, ">") {
 		return prefix + ".>"
 	}
 

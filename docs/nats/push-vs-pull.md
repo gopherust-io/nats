@@ -71,6 +71,8 @@ cfg.RuntimeConsumer.PendingMsgBuffer = 10 << 20  // 10 MiB pending bytes cap
 | Hung handler (no Ack) | Redelivery after `AckWait` | Set `AckWait` > p99 handler; `MaxDeliver`; optional [`WithDLQ`](recipes.md#recipe-g--dead-letter-dlq--subscription-supervisor) |
 | Dead / stalled push interest | Idle heartbeat miss → `ErrConsumerNotActive` | `Supervise*` + alert on `idle_heartbeat_misses` / `supervisor_give_up` |
 | Backlog while process “alive” | `consumer_stall` / rising `NumPending` | `WatchSoftLiveness` + `FlightRecorder`; `TrackedConsumers` lag |
+| Sustained JetStream backlog | `slow_consumer_detected` (pending / lag / ack-pending ratio) | `WatchSlowConsumer` with thresholds |
+| Same throughput, much slower handling | `behavior_fingerprint_anomaly` | `WatchBehaviorFingerprint` |
 
 ### Durable configuration (push)
 
@@ -210,7 +212,7 @@ Missed pull heartbeats return `ErrNoHeartbeat` (counted as `idle_heartbeat_misse
 ## Library behavior (both modes)
 
 - **Manual ack:** library adds `ManualAck()` on subscribe; `processMessage` calls `Ack()` on success, `Nak()` on handler error. `ErrDLQRouted` (from `WithDLQ`) skips Ack/Nak after Term.
-- **Metrics:** when enabled, records receive count, handling time, ack/nak totals, redeliveries, `resubscribe_total`, `supervisor_give_up`, `consumer_stall`.
+- **Metrics:** when enabled, records receive count, handling time, ack/nak totals, redeliveries, `resubscribe_total`, `supervisor_give_up`, `consumer_stall`, `slow_consumer_detected`, `behavior_fingerprint_anomaly`.
 - **Pull metrics:** `fetch_batch_size`, `fetch_wait_seconds` histograms.
 
 ## Queue soft-liveness
@@ -238,11 +240,81 @@ defer live.Stop()
 // On incident: rec.WriteJSON(os.Stdout) or rec.Snapshot()
 ```
 
+## Slow consumer detection
+
+`WatchSoftLiveness` detects **stalls** (rising pending without process activity). `WatchSlowConsumer` detects **sustained backlog** against absolute thresholds — useful when the process is still acking but falling behind the stream tip.
+
+Default thresholds (override via `SlowConsumerConfig`):
+
+| Signal | Default |
+|--------|---------|
+| `NumPending` | `>= 1000` |
+| Lag (`LastSeq − Delivered.Stream`) | `>= 1000` |
+| `NumAckPending` / `MaxAckPending` | `>= 90%` when `MaxAckPending > 0` |
+
+Thresholds must hold for `SustainFor` (default 30s) before firing. Emits metric `slow_consumer_detected` (separate from backpressure `slow_consumer_events`).
+
+```go
+slow, _ := client.WatchSlowConsumer(ctx, sub, libnats.SlowConsumerConfig{
+    SustainFor:       30 * time.Second,
+    PendingThreshold: 1000,
+    LagThreshold:     1000,
+    AckPendingRatio:  0.9,
+    CircuitStop:      true,
+    OnSlow: func(ev libnats.SlowConsumerEvent) {
+        // alert / scale / dump recorder
+    },
+})
+defer slow.Stop()
+```
+
+Use `EvaluateSlowConsumer` for one-shot checks without a watcher.
+
+## Consumer behavior fingerprinting
+
+`WatchBehaviorFingerprint` learns each worker's normal **msg/min** and **mean handling latency** from `OnMessageHandled` samples (the same path as `message_handling_seconds`). After warmup it fires when throughput stays within `RateTolerance` of baseline while processing latency is at least `LatencyFactor`× baseline for `SustainFor` — e.g. billing-worker still at ~1000 msg/min but 200ms → 2.4s handling.
+
+Default knobs (override via `BehaviorFingerprintConfig`):
+
+| Setting | Default |
+|---------|---------|
+| `PollInterval` | `5s` |
+| `Window` | `60s` |
+| `Warmup` | `5m` |
+| `MinSamples` | `50` |
+| `LatencyFactor` | `3` |
+| `RateTolerance` | `±30%` |
+| `SustainFor` | `30s` |
+
+Emits metric `behavior_fingerprint_anomaly`. Event payload carries `Normal` / `Current` `BehaviorSnapshot` values for alerts.
+
+When `Client.WatchBehaviorFingerprint` is used, snapshots are also published to JetStream KV bucket `nats_consol_fingerprints` (key `{stream}/{durable}`) so **nats-consol** can show Normal / Current / Anomaly on Consumer Detail. Create the bucket once (`KV().CreateOrUpdate`) or let the worker example do it. Override with `ReportBucket` / `ReportKV` if needed.
+
+```go
+_, _ = client.KV().CreateOrUpdate(ctx, libnats.KeyValueConfig{
+    Bucket: libnats.DefaultBehaviorFingerprintKVBucket, History: 1,
+})
+fp, _ := client.WatchBehaviorFingerprint(ctx, sub, libnats.BehaviorFingerprintConfig{
+    LatencyFactor: 3,
+    RateTolerance: 0.3,
+    SustainFor:    30 * time.Second,
+    CircuitStop:   true,
+    OnAnomaly: func(ev libnats.BehaviorAnomalyEvent) {
+        // alert: ev.Normal vs ev.Current (MsgPerMin, Processing)
+    },
+})
+defer fp.Stop()
+```
+
+Use `EvaluateBehaviorFingerprint` for pure threshold checks without a watcher.
+
 Pair with:
 
 - `SuperviseQueueSubscribeBound` so invalid interest still resubscribes
 - `MetricsConfig.TrackedConsumers` lag alerts
 - Non-queue push + `IdleHeartbeat` when a single instance needs HB-based stall detection
 - `FlightRecorder` for a dumpable timeline of supervisor / stall / DLQ events
+- `WatchSlowConsumer` for threshold-based backlog (vs soft-liveness stall)
+- `WatchBehaviorFingerprint` for latency regression at stable throughput
 
 Next: [Configuration recipes](recipes.md) · [Consumer tuning guide](consumer-tuning-guide.md)

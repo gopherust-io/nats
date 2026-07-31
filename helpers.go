@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/gopherust-io/nats/internal/bytesconv"
 	"github.com/gopherust-io/tel"
 )
 
@@ -23,7 +24,7 @@ func validateOutboundSubject(subject, op string, skip bool) error {
 		return nil
 	}
 	if err := ValidatePublishSubject(subject); err != nil {
-		if errors.Is(err, ErrInvalidSubject) && subject == empty {
+		if errors.Is(err, ErrInvalidSubject) && bytesconv.IsEmpty(subject) {
 			return fmt.Errorf("%s subject=%q: %w", op, subject, ErrEmptySubjectNotAllowed)
 		}
 

@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/gopherust-io/nats/internal/bytesconv"
 	natspkg "github.com/nats-io/nats.go"
 )
 
@@ -80,7 +81,7 @@ func (c *consumer) Pull(stream, durable string) (PullConsumer, error) {
 		err error
 	)
 
-	if durable != empty {
+	if !bytesconv.IsEmpty(durable) {
 		if verr := ValidateDurableName(durable); verr != nil {
 			return nil, fmt.Errorf("pull stream=%q durable=%q: %w", stream, durable, verr)
 		}

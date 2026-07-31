@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/gopherust-io/nats/internal/bytesconv"
 	natspkg "github.com/nats-io/nats.go"
 	"github.com/nats-io/nkeys"
 	"github.com/rs/zerolog"
@@ -129,7 +130,7 @@ func appendBaseConnOptions(opts []natspkg.Option, conn Connection) []natspkg.Opt
 		opts = append(opts, natspkg.DrainTimeout(conn.DrainTimeout))
 	}
 
-	if conn.ClientName != empty {
+	if !bytesconv.IsEmpty(conn.ClientName) {
 		opts = append(opts, natspkg.Name(conn.ClientName))
 	}
 
@@ -153,12 +154,12 @@ func appendBaseConnOptions(opts []natspkg.Option, conn Connection) []natspkg.Opt
 }
 
 func appendAuthOptions(opts []natspkg.Option, conn Connection) ([]natspkg.Option, error) {
-	if conn.CredentialsFile != empty {
+	if !bytesconv.IsEmpty(conn.CredentialsFile) {
 		opts = append(opts, natspkg.UserCredentials(conn.CredentialsFile))
 	}
 
-	if conn.Seed != empty {
-		kp, err := nkeys.FromSeed([]byte(conn.Seed))
+	if !bytesconv.IsEmpty(conn.Seed) {
+		kp, err := nkeys.FromSeed(bytesconv.StringToBytes(conn.Seed))
 		if err != nil {
 			return nil, fmt.Errorf("%w: %w", ErrInvalidNKeySeed, err)
 		}
@@ -173,11 +174,11 @@ func appendAuthOptions(opts []natspkg.Option, conn Connection) ([]natspkg.Option
 		}))
 	}
 
-	if conn.User != empty && conn.Password != empty {
+	if !bytesconv.IsEmpty(conn.User) && !bytesconv.IsEmpty(conn.Password) {
 		opts = append(opts, natspkg.UserInfo(conn.User, conn.Password))
 	}
 
-	if conn.Secret != empty {
+	if !bytesconv.IsEmpty(conn.Secret) {
 		opts = append(opts, natspkg.Token(conn.Secret))
 	}
 
@@ -247,7 +248,7 @@ func buildTLSConfig(cfg ConnectionTLS) (*tls.Config, error) {
 	}
 
 	hasMaterial := len(cfg.CA) > 0 || len(cfg.Cert) > 0 || len(cfg.Key) > 0 ||
-		cfg.InsecureSkipVerify || cfg.ServerName != empty
+		cfg.InsecureSkipVerify || !bytesconv.IsEmpty(cfg.ServerName)
 	if !hasMaterial {
 		return nil, nil //nolint:nilnil // no TLS configured is a valid outcome
 	}

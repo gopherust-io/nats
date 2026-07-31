@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/gopherust-io/nats/internal/bytesconv"
 )
 
 const defaultMonitoringTimeout = 10 * time.Second
@@ -34,11 +36,11 @@ func newMonitoring(timeout time.Duration) Monitoring {
 
 func (m *monitoringClient) Fetch(ctx context.Context, baseURL, path string) ([]byte, error) {
 	baseURL = strings.TrimRight(baseURL, "/")
-	if baseURL == empty {
+	if bytesconv.IsEmpty(baseURL) {
 		return nil, fmt.Errorf("monitoring fetch: empty base URL")
 	}
 
-	if path == empty {
+	if bytesconv.IsEmpty(path) {
 		path = "/"
 	} else if !strings.HasPrefix(path, "/") {
 		path = "/" + path
@@ -60,8 +62,8 @@ func (m *monitoringClient) Fetch(ctx context.Context, baseURL, path string) ([]b
 		return nil, fmt.Errorf("monitoring read: %w", err)
 	}
 
-	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("monitoring %s: status %d: %s", path, resp.StatusCode, string(body))
+	if resp.StatusCode >= http.StatusBadRequest {
+		return nil, fmt.Errorf("monitoring %s: status %d: %s", path, resp.StatusCode, bytesconv.BytesToString(body))
 	}
 
 	return body, nil

@@ -282,21 +282,20 @@ libnats.DurableConsumerConfig{
 
 ```go
 // Seek existing audit durable (preserves MaxAckPending / AckWait / filters)
-client.Replay().ResetConsumer(ctx, stream, durable,
+_, _ = client.Replay().ResetConsumer(ctx, stream, durable,
     libnats.WithFilterSubject("orders.>"), libnats.FromSeq(seq))
 
 // Or create a side-car durable so the live processor is untouched
 temp, _ := client.Replay().CreateReplayConsumer(ctx, stream, "orders-processor",
-    libnats.FromSeq(seq))
+    libnats.FromSeq(seq), libnats.UntilSeq(seq+100), libnats.Limit(101))
 
-// Peek without moving any consumer cursor
+// Peek / export without moving any consumer cursor
 msg, _ := client.Replay().GetMsg(ctx, stream, seq)
-last, _ := client.Replay().GetLastMsgForSubject(ctx, stream, "orders.created")
-next, _ := client.Replay().GetNextMsgAfter(ctx, stream, seq)
-_ = temp
+rangeMsgs, truncated, _ := client.Replay().GetMsgRange(ctx, stream, seq, seq+10)
+_ = temp.Durable
 _ = msg
-_ = last
-_ = next
+_ = rangeMsgs
+_ = truncated
 ```
 
 See [Recipe E](recipes.md#recipe-e--audit--replay).

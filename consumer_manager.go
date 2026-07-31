@@ -7,6 +7,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/gopherust-io/nats/internal/bytesconv"
 	natspkg "github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 )
@@ -58,6 +59,12 @@ func toNatsConsumerConfig(cfg DurableConsumerConfig) *natspkg.ConsumerConfig {
 		OptStartSeq:       cfg.OptStartSeq,
 		OptStartTime:      cfg.OptStartTime,
 	}
+	if len(cfg.Metadata) > 0 {
+		cc.Metadata = make(map[string]string, len(cfg.Metadata))
+		for k, v := range cfg.Metadata {
+			cc.Metadata[k] = v
+		}
+	}
 
 	// DeliverAll is zero; only copy when explicitly set so updates can omit it.
 	if cfg.HasDeliverPolicy {
@@ -88,7 +95,7 @@ func (m *consumerManager) CreateOrUpdateConsumer(
 		return nil, err
 	}
 
-	if cfg.FilterSubject != empty {
+	if !bytesconv.IsEmpty(cfg.FilterSubject) {
 		if err := ValidateSubject(cfg.FilterSubject); err != nil {
 			return nil, err
 		}
@@ -138,7 +145,7 @@ func (m *consumerManager) AddConsumer(_ context.Context, stream string, cfg *nat
 		return nil, fmt.Errorf("add consumer stream=%q: %w", stream, ErrEmptyConfigNotAllowed)
 	}
 
-	if cfg.Durable != empty {
+	if !bytesconv.IsEmpty(cfg.Durable) {
 		if err := ValidateDurableName(cfg.Durable); err != nil {
 			return nil, err
 		}
@@ -161,7 +168,7 @@ func (m *consumerManager) UpdateConsumer(_ context.Context, stream string, cfg *
 		return nil, fmt.Errorf("update consumer stream=%q: %w", stream, ErrEmptyConfigNotAllowed)
 	}
 
-	if cfg.Durable != empty {
+	if !bytesconv.IsEmpty(cfg.Durable) {
 		if err := ValidateDurableName(cfg.Durable); err != nil {
 			return nil, err
 		}

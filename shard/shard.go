@@ -1,5 +1,9 @@
 package shard
 
+import (
+	"github.com/gopherust-io/nats/internal/bytesconv"
+)
+
 const (
 	itoaBufLen = 20
 
@@ -20,7 +24,7 @@ func Index(key string, numShards int) int {
 // → "orders.shard.3.created".
 func Subject(prefix, key string, numShards int, action string) string {
 	idx := Index(key, numShards)
-	if action == "" {
+	if bytesconv.IsEmpty(action) {
 		return prefix + "." + itoa(idx)
 	}
 
@@ -52,5 +56,5 @@ func itoa(n int) string {
 	}
 
 	// Must copy: buf is stack-backed; unsafe.String would dangle.
-	return string(buf[i:])
+	return bytesconv.BytesToString(buf[i:])
 }

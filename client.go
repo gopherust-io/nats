@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/gopherust-io/nats/internal/bytesconv"
 	natspkg "github.com/nats-io/nats.go"
 	"github.com/rs/zerolog"
 )
@@ -28,6 +29,7 @@ type Client interface {
 	SuperviseSubscribeBound(ctx context.Context, stream, durable, subject string, handler MsgHandler, cfg SupervisorConfig) (SupervisedSubscription, error)
 	SupervisePullProcess(ctx context.Context, stream, durable string, handler MsgHandler, cfg SupervisorConfig, opts ...ProcessOpt) error
 	WatchSoftLiveness(ctx context.Context, sub Subscription, cfg SoftLivenessConfig) (*SoftLiveness, error)
+	WatchBehaviorFingerprint(ctx context.Context, sub Subscription, cfg BehaviorFingerprintConfig) (*BehaviorFingerprint, error)
 	// WithShadow wraps handlers and records shadow_* metrics when metrics are enabled.
 	WithShadow(cfg ShadowConfig, primary, shadowHandler MsgHandler) MsgHandler
 }
@@ -37,7 +39,7 @@ func NewClient(ctx context.Context, cfg *Config) (Client, error) {
 		return nil, fmt.Errorf("new client: %w", ErrEmptyConfigNotAllowed)
 	}
 
-	if cfg.Conn.Address == empty {
+	if bytesconv.IsEmpty(cfg.Conn.Address) {
 		return nil, fmt.Errorf("new client: %w", ErrEmptyAddressNotAllowed)
 	}
 
@@ -57,7 +59,7 @@ func NewClient(ctx context.Context, cfg *Config) (Client, error) {
 		metricsCfg.AllowMetrics = true
 	}
 
-	if metricsCfg.Prefix == "" && cfg.Conn.MetricPrefix != "" {
+	if bytesconv.IsEmpty(metricsCfg.Prefix) && !bytesconv.IsEmpty(cfg.Conn.MetricPrefix) {
 		metricsCfg.Prefix = cfg.Conn.MetricPrefix
 	}
 

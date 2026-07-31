@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gopherust-io/nats/internal/bytesconv"
 	natspkg "github.com/nats-io/nats.go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -44,7 +45,7 @@ func TestAppendConsumerOptsSkipsHeartbeatWhenDisabled(t *testing.T) {
 
 func TestRecordMessageMetricsNil(t *testing.T) {
 	c := &consumer{metrics: nil}
-	msg := &natspkg.Msg{Subject: "test.subject", Data: []byte("data")}
+	msg := &natspkg.Msg{Subject: "test.subject", Data: bytesconv.StringToBytes("data")}
 	assert.Equal(t, int64(0), c.recordMessageMetrics(context.Background(), msg, nil))
 }
 
@@ -56,7 +57,7 @@ func TestRecordMessageMetricsWithMetrics(t *testing.T) {
 	require.NotNil(t, metrics)
 
 	c := &consumer{metrics: metrics}
-	msg := &natspkg.Msg{Subject: "bench.subject", Data: []byte(`{"id":"1"}`)}
+	msg := &natspkg.Msg{Subject: "bench.subject", Data: bytesconv.StringToBytes(`{"id":"1"}`)}
 	start := c.recordMessageMetrics(context.Background(), msg, nil)
 	assert.Positive(t, start)
 }
@@ -69,7 +70,7 @@ func TestRecordProcessError(t *testing.T) {
 	require.NotNil(t, metrics)
 
 	c := &consumer{metrics: metrics}
-	msg := &natspkg.Msg{Subject: "orders.fail", Data: []byte("x")}
+	msg := &natspkg.Msg{Subject: "orders.fail", Data: bytesconv.StringToBytes("x")}
 	c.recordProcessError(context.Background(), msg.Subject, msg, assert.AnError)
 	assert.Equal(t, "orders.fail", c.metricSubject(msg.Subject))
 
@@ -121,7 +122,7 @@ func TestDecodeTyped(t *testing.T) {
 }
 
 func TestDecodeTypedError(t *testing.T) {
-	msg := &natspkg.Msg{Subject: "bad", Data: []byte("not-json")}
+	msg := &natspkg.Msg{Subject: "bad", Data: bytesconv.StringToBytes("not-json")}
 	_, err := DecodeTyped[map[string]string](msg, JSON)
 	require.Error(t, err)
 }

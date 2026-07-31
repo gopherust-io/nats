@@ -8,6 +8,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/gopherust-io/nats/internal/bytesconv"
 	natspkg "github.com/nats-io/nats.go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -36,7 +37,7 @@ func TestWithPassthroughWhenDisabled(t *testing.T) {
 
 		return nil
 	})
-	require.NoError(t, h(context.Background(), &natspkg.Msg{Subject: "a", Data: []byte("x")}))
+	require.NoError(t, h(context.Background(), &natspkg.Msg{Subject: "a", Data: bytesconv.StringToBytes("x")}))
 	assert.True(t, called)
 }
 
@@ -53,7 +54,7 @@ func TestWithHandlerRequestCopiesHeaders(t *testing.T) {
 
 	err := h(context.Background(), &natspkg.Msg{
 		Subject: "orders.created",
-		Data:    []byte(`{"id":1}`),
+		Data:    bytesconv.StringToBytes(`{"id":1}`),
 		Header: natspkg.Header{
 			headerMsgID:       []string{"m1"},
 			headerTraceID:     []string{"trace-1"},
@@ -77,7 +78,7 @@ func TestWithNonDLQErrorPassthrough(t *testing.T) {
 	h := With(Config{Publisher: pub, Subject: "dlq"}, func(_ context.Context, _ *natspkg.Msg) error {
 		return want
 	})
-	err := h(context.Background(), &natspkg.Msg{Subject: "a", Data: []byte("x")})
+	err := h(context.Background(), &natspkg.Msg{Subject: "a", Data: bytesconv.StringToBytes("x")})
 	require.ErrorIs(t, err, want)
 	assert.Empty(t, pub.subjects)
 }
@@ -86,7 +87,7 @@ func TestApplyAutopsyHeaders(t *testing.T) {
 	t.Parallel()
 	cfg := AutopsyConfig{Enabled: true, IncludeStack: true}.withDefaults()
 	headers := map[string][]string{}
-	data := []byte(`{"id":1}`)
+	data := bytesconv.StringToBytes(`{"id":1}`)
 	applyAutopsyHeaders(headers, cfg, data, &autopsyInfo{
 		Err:   "send message to dlq: bad payload",
 		Stack: "goroutine 1 [running]:\nmain.main()",
@@ -128,7 +129,7 @@ func TestWithAutopsyPublishesHeaders(t *testing.T) {
 
 	err := h(context.Background(), &natspkg.Msg{
 		Subject: "orders.created",
-		Data:    []byte(`{"id":9}`),
+		Data:    bytesconv.StringToBytes(`{"id":9}`),
 	})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "term after dlq")

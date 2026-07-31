@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/gopherust-io/nats/internal/bytesconv"
 	natspkg "github.com/nats-io/nats.go"
 )
 
@@ -105,10 +106,10 @@ func With(cfg Config, handler Handler) Handler {
 	if cfg.Publisher == nil {
 		return handler
 	}
-	if cfg.Subject == "" {
+	if bytesconv.IsEmpty(cfg.Subject) {
 		return handler
 	}
-	if cfg.Reason == "" {
+	if bytesconv.IsEmpty(cfg.Reason) {
 		cfg.Reason = "max_deliver"
 	}
 	cfg.Autopsy = cfg.Autopsy.withDefaults()
@@ -149,13 +150,13 @@ func route(ctx context.Context, cfg Config, msg *natspkg.Msg, reason string, aut
 		HeaderReason:          {reason},
 	}
 	if msg.Header != nil {
-		if tid := msg.Header.Get(headerTraceID); tid != "" {
+		if tid := msg.Header.Get(headerTraceID); !bytesconv.IsEmpty(tid) {
 			headers[headerTraceID] = []string{tid}
 		}
-		if mid := msg.Header.Get(headerMsgID); mid != "" {
+		if mid := msg.Header.Get(headerMsgID); !bytesconv.IsEmpty(mid) {
 			headers[headerMsgID] = []string{mid}
 		}
-		if ct := msg.Header.Get(headerContentType); ct != "" {
+		if ct := msg.Header.Get(headerContentType); !bytesconv.IsEmpty(ct) {
 			headers[headerContentType] = []string{ct}
 		}
 	}
@@ -214,10 +215,10 @@ func applyAutopsyHeaders(headers map[string][]string, cfg AutopsyConfig, data []
 	if info == nil {
 		return
 	}
-	if info.Err != "" {
+	if !bytesconv.IsEmpty(info.Err) {
 		headers[HeaderAutopsyError] = []string{truncateString(info.Err, cfg.MaxErrorBytes)}
 	}
-	if cfg.IncludeStack && info.Stack != "" {
+	if cfg.IncludeStack && !bytesconv.IsEmpty(info.Stack) {
 		headers[HeaderAutopsyStack] = []string{truncateString(info.Stack, cfg.MaxStackBytes)}
 	}
 }

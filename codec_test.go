@@ -3,6 +3,7 @@ package nats
 import (
 	"testing"
 
+	"github.com/gopherust-io/nats/internal/bytesconv"
 	natspkg "github.com/nats-io/nats.go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -63,7 +64,7 @@ func TestEncodeErrors(t *testing.T) {
 }
 
 func TestDecodeErrors(t *testing.T) {
-	err := Decode([]byte("{}"), MessageType(0), &struct{}{})
+	err := Decode(bytesconv.StringToBytes("{}"), MessageType(0), &struct{}{})
 	require.Error(t, err)
 	require.ErrorIs(t, err, ErrInvalidMessageType)
 

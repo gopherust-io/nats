@@ -7,9 +7,14 @@ package bytesconv
 
 import "unsafe"
 
+// IsEmpty reports whether s has length 0.
+func IsEmpty(s string) bool {
+	return len(s) == 0
+}
+
 // StringToBytes returns a read-only view of s as a []byte without copying.
 func StringToBytes(s string) []byte {
-	if s == "" {
+	if IsEmpty(s) {
 		return nil
 	}
 

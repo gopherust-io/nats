@@ -3,6 +3,7 @@ package shard
 import (
 	"testing"
 
+	"github.com/gopherust-io/nats/internal/bytesconv"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -34,7 +35,7 @@ func TestSubjectFormat(t *testing.T) {
 		assert.Contains(t, subject, tt.prefix+".")
 		idx := Index(tt.key, tt.shards)
 		assert.Contains(t, subject, itoa(idx))
-		if tt.action != "" {
+		if !bytesconv.IsEmpty(tt.action) {
 			assert.Contains(t, subject, "."+tt.action)
 		}
 	}

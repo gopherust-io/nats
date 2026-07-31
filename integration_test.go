@@ -170,7 +170,7 @@ func TestReplayResetConsumer(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	err = client.Replay().ResetConsumer(ctx, stream, durable,
+	_, err = client.Replay().ResetConsumer(ctx, stream, durable,
 		FromSeq(1), WithReplayPolicy(ReplayInstant))
 	require.NoError(t, err)
 
@@ -221,15 +221,23 @@ func TestReplayCreateReplayConsumerAndPeek(t *testing.T) {
 	side, err := client.Replay().CreateReplayConsumer(ctx, stream, source,
 		FromSeq(1), WithReplayPolicy(ReplayInstant))
 	require.NoError(t, err)
-	assert.NotEqual(t, source, side)
+	assert.NotEqual(t, source, side.Durable)
 
 	live, err := client.Consumers().ConsumerInfo(ctx, stream, source)
 	require.NoError(t, err)
 	assert.Equal(t, DeliverNew, live.Config.DeliverPolicy)
 	assert.Equal(t, 500, live.Config.MaxAckPending)
 
-	sideInfo, err := client.Consumers().ConsumerInfo(ctx, stream, side)
+	sideInfo, err := client.Consumers().ConsumerInfo(ctx, stream, side.Durable)
 	require.NoError(t, err)
 	assert.Equal(t, 500, sideInfo.Config.MaxAckPending)
 	assert.Equal(t, DeliverByStartSequence, sideInfo.Config.DeliverPolicy)
+
+	assert.Equal(t, uint64(1), first.Sequence)
+	assert.Equal(t, uint64(2), next.Sequence)
+
+	rangeMsgs, truncated, err := client.Replay().GetMsgRange(ctx, stream, 1, 2)
+	require.NoError(t, err)
+	assert.False(t, truncated)
+	require.Len(t, rangeMsgs, 2)
 }

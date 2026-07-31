@@ -9,6 +9,8 @@ import (
 	natspkg "github.com/nats-io/nats.go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/gopherust-io/nats/internal/bytesconv"
 )
 
 type mockStreamManager struct {
@@ -40,7 +42,12 @@ func (m *mockStreamManager) StreamInfo(context.Context, string) (*natspkg.Stream
 		return nil, m.streamEr
 	}
 
-	return &natspkg.StreamInfo{State: natspkg.StreamState{LastSeq: m.lastSeq}}, nil
+	first := uint64(1)
+	if m.lastSeq == 0 {
+		first = 0
+	}
+
+	return &natspkg.StreamInfo{State: natspkg.StreamState{FirstSeq: first, LastSeq: m.lastSeq}}, nil
 }
 
 func (m *mockStreamManager) ListStreamsPage(context.Context, int, int) ([]*natspkg.StreamInfo, int, error) {
@@ -162,24 +169,25 @@ func (m *mockConsumerManager) ResumeConsumer(context.Context, string, string) er
 func TestReplayGetMsgJSONDefault(t *testing.T) {
 	r := newReplay(&mockStreamManager{
 		msgs: map[uint64]*natspkg.RawStreamMsg{
-			1: {Data: []byte(`{"id":"1"}`)},
+			1: {Sequence: 1, Subject: "s", Data: bytesconv.StringToBytes(`{"id":"1"}`)},
 		},
 	}, &mockConsumerManager{})
 
 	msg, err := r.GetMsg(context.Background(), "STREAM", 1)
 	require.NoError(t, err)
 	assert.Equal(t, JSON, msg.MessageType)
-	data, ok := msg.Data.([]byte)
-	require.True(t, ok)
-	assert.JSONEq(t, `{"id":"1"}`, string(data))
+	assert.Equal(t, uint64(1), msg.Sequence)
+	assert.Equal(t, "s", msg.Subject)
+	assert.JSONEq(t, `{"id":"1"}`, bytesconv.BytesToString(msg.Data))
 }
 
 func TestReplayGetMsgFromHeader(t *testing.T) {
 	r := newReplay(&mockStreamManager{
 		msgs: map[uint64]*natspkg.RawStreamMsg{
 			1: {
-				Data:   []byte{0x01},
-				Header: natspkg.Header{HeaderContentType: []string{ContentTypeProto}},
+				Sequence: 1,
+				Data:     []byte{0x01},
+				Header:   natspkg.Header{HeaderContentType: []string{ContentTypeProto}},
 			},
 		},
 	}, &mockConsumerManager{})
@@ -198,30 +206,97 @@ func TestReplayGetMsgNotFound(t *testing.T) {
 func TestReplayGetLastMsgForSubject(t *testing.T) {
 	r := newReplay(&mockStreamManager{
 		lastBy: map[string]*natspkg.RawStreamMsg{
-			"orders.created": {Data: []byte(`{"ok":true}`)},
+			"orders.created": {Sequence: 9, Subject: "orders.created", Data: bytesconv.StringToBytes(`{"ok":true}`)},
 		},
 	}, &mockConsumerManager{})
 
 	msg, err := r.GetLastMsgForSubject(context.Background(), "STREAM", "orders.created")
 	require.NoError(t, err)
-	data, ok := msg.Data.([]byte)
-	require.True(t, ok)
-	assert.JSONEq(t, `{"ok":true}`, string(data))
+	assert.Equal(t, uint64(9), msg.Sequence)
+	assert.JSONEq(t, `{"ok":true}`, bytesconv.BytesToString(msg.Data))
 }
 
 func TestReplayGetNextMsgAfterSkipsGaps(t *testing.T) {
 	r := newReplay(&mockStreamManager{
 		lastSeq: 5,
 		msgs: map[uint64]*natspkg.RawStreamMsg{
-			4: {Data: []byte(`{"n":4}`)},
+			4: {Sequence: 4, Data: bytesconv.StringToBytes(`{"n":4}`)},
 		},
 	}, &mockConsumerManager{})
 
 	msg, err := r.GetNextMsgAfter(context.Background(), "STREAM", 2)
 	require.NoError(t, err)
-	data, ok := msg.Data.([]byte)
-	require.True(t, ok)
-	assert.JSONEq(t, `{"n":4}`, string(data))
+	assert.Equal(t, uint64(4), msg.Sequence)
+	assert.JSONEq(t, `{"n":4}`, bytesconv.BytesToString(msg.Data))
+}
+
+func TestReplayGetMsgRangeSkipsGapsAndCaps(t *testing.T) {
+	r := newReplay(&mockStreamManager{
+		lastSeq: 6,
+		msgs: map[uint64]*natspkg.RawStreamMsg{
+			1: {Sequence: 1, Data: bytesconv.StringToBytes(`1`)},
+			3: {Sequence: 3, Data: bytesconv.StringToBytes(`3`)},
+			5: {Sequence: 5, Data: bytesconv.StringToBytes(`5`)},
+			6: {Sequence: 6, Data: bytesconv.StringToBytes(`6`)},
+		},
+	}, &mockConsumerManager{})
+
+	msgs, truncated, err := r.GetMsgRange(context.Background(), "STREAM", 1, 6, WithMaxMessages(2))
+	require.NoError(t, err)
+	require.Len(t, msgs, 2)
+	assert.Equal(t, uint64(1), msgs[0].Sequence)
+	assert.Equal(t, uint64(3), msgs[1].Sequence)
+	assert.True(t, truncated)
+}
+
+func TestReplayFindSeqByTime(t *testing.T) {
+	t0 := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	t1 := t0.Add(time.Hour)
+	t2 := t0.Add(2 * time.Hour)
+	r := newReplay(&mockStreamManager{
+		lastSeq: 3,
+		msgs: map[uint64]*natspkg.RawStreamMsg{
+			1: {Sequence: 1, Time: t0, Data: bytesconv.StringToBytes("a")},
+			2: {Sequence: 2, Time: t1, Data: bytesconv.StringToBytes("b")},
+			3: {Sequence: 3, Time: t2, Data: bytesconv.StringToBytes("c")},
+		},
+	}, &mockConsumerManager{})
+
+	first, err := r.FindFirstSeqAtOrAfter(context.Background(), "STREAM", t1)
+	require.NoError(t, err)
+	assert.Equal(t, uint64(2), first)
+
+	last, err := r.FindLastSeqAtOrBefore(context.Background(), "STREAM", t1)
+	require.NoError(t, err)
+	assert.Equal(t, uint64(2), last)
+
+	msgs, truncated, err := r.GetMsgRangeByTime(context.Background(), "STREAM", t1, t2)
+	require.NoError(t, err)
+	assert.False(t, truncated)
+	require.Len(t, msgs, 2)
+	assert.Equal(t, uint64(2), msgs[0].Sequence)
+	assert.Equal(t, uint64(3), msgs[1].Sequence)
+}
+
+func TestReplayOneMessageSetsBounds(t *testing.T) {
+	var created DurableConsumerConfig
+	r := newReplay(&mockStreamManager{}, &mockConsumerManager{
+		infoFn: func(context.Context, string, string) (*natspkg.ConsumerInfo, error) {
+			return nil, natspkg.ErrConsumerNotFound
+		},
+		createFn: func(_ context.Context, _ string, cfg DurableConsumerConfig) (*natspkg.ConsumerInfo, error) {
+			created = cfg
+			return &natspkg.ConsumerInfo{Name: cfg.Durable}, nil
+		},
+	})
+
+	res, err := r.ResetConsumer(context.Background(), "ORDERS", "d", OneMessage(42))
+	require.NoError(t, err)
+	assert.Equal(t, uint64(42), res.StartSeq)
+	assert.Equal(t, uint64(42), res.UntilSeq)
+	assert.Equal(t, 1, res.Limit)
+	assert.Equal(t, "42", created.Metadata[MetaReplayUntilSeq])
+	assert.Equal(t, "1", created.Metadata[MetaReplayLimit])
 }
 
 func TestReplayResetConsumerPreservesExistingConfig(t *testing.T) {
@@ -246,9 +321,11 @@ func TestReplayResetConsumerPreservesExistingConfig(t *testing.T) {
 		},
 	})
 
-	err := r.ResetConsumer(context.Background(), "ORDERS", "replay-durable",
+	res, err := r.ResetConsumer(context.Background(), "ORDERS", "replay-durable",
 		FromSeq(100), WithReplayPolicy(ReplayInstant))
 	require.NoError(t, err)
+	assert.Equal(t, "replay-durable", res.Durable)
+	assert.Equal(t, uint64(100), res.StartSeq)
 	assert.Equal(t, 777, created.MaxAckPending)
 	assert.Equal(t, 45*time.Second, created.AckWait)
 	assert.Equal(t, 5, created.MaxDeliver)
@@ -270,9 +347,10 @@ func TestReplayResetConsumerWhenMissing(t *testing.T) {
 		},
 	})
 
-	err := r.ResetConsumer(context.Background(), "ORDERS", "missing",
+	res, err := r.ResetConsumer(context.Background(), "ORDERS", "missing",
 		WithFilterSubject("orders.>"), FromNew())
 	require.NoError(t, err)
+	assert.Equal(t, "missing", res.Durable)
 	assert.Equal(t, "missing", created.Durable)
 	assert.Equal(t, "orders.>", created.FilterSubject)
 	assert.Equal(t, AckExplicit, created.AckPolicy)
@@ -285,7 +363,7 @@ func TestReplayResetConsumerPropagatesInfoError(t *testing.T) {
 		},
 	})
 
-	err := r.ResetConsumer(context.Background(), "ORDERS", "replay-durable")
+	_, err := r.ResetConsumer(context.Background(), "ORDERS", "replay-durable")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, assert.AnError)
 }
@@ -317,12 +395,16 @@ func TestReplayCreateReplayConsumerSideCar(t *testing.T) {
 		},
 	})
 
-	name, err := r.CreateReplayConsumer(context.Background(), "ORDERS", "orders-processor",
-		WithReplayDurable("orders-processor-replay"), FromSeq(50))
+	res, err := r.CreateReplayConsumer(context.Background(), "ORDERS", "orders-processor",
+		WithReplayDurable("orders-processor-replay"), FromSeq(50), UntilSeq(60), Limit(10))
 	require.NoError(t, err)
-	assert.Equal(t, "orders-processor-replay", name)
+	assert.Equal(t, "orders-processor-replay", res.Durable)
+	assert.Equal(t, uint64(50), res.StartSeq)
+	assert.Equal(t, uint64(60), res.UntilSeq)
+	assert.Equal(t, 10, res.Limit)
 	assert.Equal(t, 1000, created.MaxAckPending)
 	assert.Equal(t, "orders.>", created.FilterSubject)
+	assert.Equal(t, "60", created.Metadata[MetaReplayUntilSeq])
 	assert.False(t, deleted, "source durable must not be deleted")
 }
 
@@ -335,6 +417,13 @@ func TestReplayCreateReplayConsumerRejectsSameName(t *testing.T) {
 
 	_, err := r.CreateReplayConsumer(context.Background(), "ORDERS", "same", WithReplayDurable("same"))
 	require.Error(t, err)
+}
+
+func TestValidateReplayBoundsRejectsFromNew(t *testing.T) {
+	cfg := applyReplayOpts([]ReplayOpt{FromNew(), Limit(1)})
+	err := validateReplayBounds(cfg)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrInvalidReplayBound)
 }
 
 func TestApplyReplayOpts(t *testing.T) {

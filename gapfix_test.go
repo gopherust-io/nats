@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gopherust-io/nats/internal/bytesconv"
 	natspkg "github.com/nats-io/nats.go"
 	"github.com/stretchr/testify/require"
 )
@@ -54,7 +55,7 @@ func TestAckHelpersInProgress(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = sub.Unsubscribe() })
 
-	require.NoError(t, client.Publisher().PublishBytes(ctx, subject, []byte("x")))
+	require.NoError(t, client.Publisher().PublishBytes(ctx, subject, bytesconv.StringToBytes("x")))
 	select {
 	case <-got:
 	case <-time.After(5 * time.Second):

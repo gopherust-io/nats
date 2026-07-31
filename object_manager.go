@@ -8,6 +8,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/gopherust-io/nats/internal/bytesconv"
 	natspkg "github.com/nats-io/nats.go"
 )
 
@@ -84,17 +85,9 @@ func objectBucketStatusFrom(status natspkg.ObjectStoreStatus) ObjectBucketStatus
 func (m *objectStoreManager) ListBuckets(_ context.Context) ([]ObjectBucketStatus, error) {
 	out := make([]ObjectBucketStatus, 0)
 
-	for name := range m.js.ObjectStoreNames() {
-		os, err := m.js.ObjectStore(name)
-		if err != nil {
-			return nil, fmt.Errorf("list object buckets: open %q: %w", name, err)
-		}
-
-		status, err := os.Status()
-		if err != nil {
-			return nil, fmt.Errorf("list object buckets: status %q: %w", name, err)
-		}
-
+	// ObjectStoreNames returns stream names (OBJ_<bucket>); ObjectStores yields
+	// statuses with the bucket name already normalized.
+	for status := range m.js.ObjectStores() {
 		out = append(out, objectBucketStatusFrom(status))
 	}
 
@@ -200,7 +193,7 @@ func (m *objectStoreManager) Get(_ context.Context, bucket, name string) (*Objec
 		return nil, err
 	}
 
-	if name == empty {
+	if bytesconv.IsEmpty(name) {
 		return nil, fmt.Errorf("get object bucket=%q: empty object name", bucket)
 	}
 
@@ -239,7 +232,7 @@ func (m *objectStoreManager) Put(_ context.Context, bucket, name string, data []
 		return nil, err
 	}
 
-	if name == empty {
+	if bytesconv.IsEmpty(name) {
 		return nil, fmt.Errorf("put object bucket=%q: empty object name", bucket)
 	}
 
@@ -267,7 +260,7 @@ func (m *objectStoreManager) DeleteObject(_ context.Context, bucket, name string
 		return err
 	}
 
-	if name == empty {
+	if bytesconv.IsEmpty(name) {
 		return fmt.Errorf("delete object bucket=%q: empty object name", bucket)
 	}
 

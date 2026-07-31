@@ -234,7 +234,7 @@ Default metric prefix: `nats`. Enable with `AllowMetrics: true` (on in prod pres
 | Publish | `publish_total` | Error rate vs baseline |
 | Consume | `ack_total`, `nak_total`, `term_total`, `redelivery_total` | Rising Nak/redelivery |
 | Pool / pressure | `worker_queue_depth`, `slow_consumer_events` | Depth near buffer; slow-consumer growth |
-| Resilience | `resubscribe_total`, `supervisor_give_up`, `consumer_stall` | Any give-up/stall in prod |
+| Resilience | `resubscribe_total`, `supervisor_give_up`, `consumer_stall`, `slow_consumer_detected`, `behavior_fingerprint_anomaly` | Any give-up/stall/slow/fingerprint anomaly in prod |
 | Canary | `shadow_error_total`, `shadow_mismatch_total` | Mismatch above canary threshold |
 | Lag | `consumer_lag_messages`, `stream_messages` | Lag SLO breach |
 

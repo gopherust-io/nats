@@ -7,6 +7,7 @@ import (
 	natspkg "github.com/nats-io/nats.go"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
+	"github.com/gopherust-io/nats/internal/bytesconv"
 	"github.com/gopherust-io/tel"
 )
 
@@ -48,7 +49,7 @@ func BenchmarkProcessMessageMetrics(b *testing.B) {
 	metrics.registry.AttrCache().SubjectOpts("bench.subject")
 
 	c := &consumer{metrics: metrics}
-	msg := &natspkg.Msg{Subject: "bench.subject", Data: []byte(`{"id":"1"}`)}
+	msg := &natspkg.Msg{Subject: "bench.subject", Data: bytesconv.StringToBytes(`{"id":"1"}`)}
 	handler := func(context.Context, *natspkg.Msg) error { return nil }
 
 	b.ReportAllocs()
@@ -206,7 +207,7 @@ func BenchmarkRecordMessageMetricsNoRedelivery(b *testing.B) {
 	metrics.registry.AttrCache().SubjectOpts("bench.subject")
 
 	c := &consumer{metrics: metrics}
-	msg := &natspkg.Msg{Subject: "bench.subject", Data: []byte(`{"id":"1"}`)}
+	msg := &natspkg.Msg{Subject: "bench.subject", Data: bytesconv.StringToBytes(`{"id":"1"}`)}
 
 	b.ReportAllocs()
 
@@ -244,7 +245,7 @@ func BenchmarkPublishBytes(b *testing.B) {
 	client, ctx := benchmarkClientNoMetrics(b)
 	defer func() { _ = client.Connector().Shutdown() }()
 
-	payload := []byte(`{"id":"bench"}`)
+	payload := bytesconv.StringToBytes(`{"id":"bench"}`)
 	b.ReportAllocs()
 
 	for b.Loop() {
@@ -256,7 +257,7 @@ func BenchmarkPublishAsyncBytes(b *testing.B) {
 	client, ctx := benchmarkClientNoMetrics(b)
 	defer func() { _ = client.Connector().Shutdown() }()
 
-	payload := []byte(`{"id":"bench"}`)
+	payload := bytesconv.StringToBytes(`{"id":"bench"}`)
 	b.ReportAllocs()
 
 	for b.Loop() {

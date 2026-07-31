@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gopherust-io/nats/internal/bytesconv"
 	natspkg "github.com/nats-io/nats.go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -36,7 +37,7 @@ func TestWithShadowReexport(t *testing.T) {
 		},
 	)
 
-	require.NoError(t, h(context.Background(), &natspkg.Msg{Subject: "orders.x", Data: []byte("1")}))
+	require.NoError(t, h(context.Background(), &natspkg.Msg{Subject: "orders.x", Data: bytesconv.StringToBytes("1")}))
 	assert.Equal(t, 1, primaryCalls)
 	assert.Equal(t, 1, shadowCalls)
 

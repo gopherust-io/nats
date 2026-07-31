@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/gopherust-io/nats/internal/bytesconv"
 	natspkg "github.com/nats-io/nats.go"
 )
 
@@ -45,7 +46,7 @@ func TermWithReason(msg *natspkg.Msg, reason string) error {
 		return errors.New("term with reason: nil message")
 	}
 
-	if reason == empty {
+	if bytesconv.IsEmpty(reason) {
 		if err := msg.Term(); err != nil {
 			return fmt.Errorf("term subject=%q: %w", msg.Subject, err)
 		}

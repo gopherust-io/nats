@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gopherust-io/nats/internal/bytesconv"
 	natspkg "github.com/nats-io/nats.go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -75,7 +76,7 @@ func TestPurgeStreamIntegration(t *testing.T) {
 		Name: stream, Subjects: []string{prefix + ">"}, Replicas: 1,
 	})
 	require.NoError(t, err)
-	require.NoError(t, client.Publisher().PublishBytes(ctx, prefix+"a", []byte("1")))
+	require.NoError(t, client.Publisher().PublishBytes(ctx, prefix+"a", bytesconv.StringToBytes("1")))
 	require.NoError(t, client.Streams().PurgeStream(ctx, stream))
 	require.NoError(t, client.Streams().PurgeStream(ctx, stream, PurgeSubject(prefix+"a")))
 	require.Error(t, client.Streams().PurgeStream(ctx, "bad name"))

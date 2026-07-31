@@ -10,19 +10,27 @@ import (
 	"time"
 
 	libnats "github.com/gopherust-io/nats"
+	"github.com/gopherust-io/nats/internal/bytesconv"
 	"github.com/gopherust-io/tel"
 	"github.com/rs/zerolog"
 )
 
-const (
-	streamName      = "ORDERS"
-	dlqStream       = "ORDERS_DLQ"
-	durableName     = "orders-processor"
-	pullDurableName = "orders-puller"
-	queueName       = "orders-workers"
-	subjectFilter   = "orders.>"
-	publishSubject  = "orders.created"
-	dlqSubject      = "orders.dlq.poison"
+// Topology names are env-overridable so the example can run alongside streams
+// it does not own, instead of trying to reshape them.
+var (
+	streamName      = envOr("STREAM_NAME", "ORDERS")
+	dlqStream       = envOr("DLQ_STREAM", streamName+"_DLQ")
+	durableName     = envOr("DURABLE_NAME", "orders-processor")
+	pullDurableName = envOr("PULL_DURABLE_NAME", "orders-puller")
+	queueName       = envOr("QUEUE_NAME", "orders-workers")
+
+	subjectPrefix    = envOr("SUBJECT_PREFIX", "orders")
+	dlqSubjectPrefix = envOr("DLQ_SUBJECT_PREFIX", subjectPrefix+".dlq")
+
+	subjectFilter    = subjectPrefix + ".>"
+	publishSubject   = subjectPrefix + ".created"
+	dlqSubjectFilter = dlqSubjectPrefix + ".>"
+	dlqSubject       = dlqSubjectPrefix + ".poison"
 )
 
 func main() {
@@ -61,7 +69,7 @@ func main() {
 		}
 	}()
 
-	if err := ensureTopology(ctx, client); err != nil {
+	if err := ensureTopology(ctx, client, role); err != nil {
 		log.Error().Err(err).Msg("ensure topology")
 		os.Exit(1)
 	}
@@ -113,7 +121,7 @@ func buildConfigForRole(role string) libnats.Config {
 	}
 }
 
-func ensureTopology(ctx context.Context, client libnats.Client) error {
+func ensureTopology(ctx context.Context, client libnats.Client, role string) error {
 	if _, err := client.Streams().CreateOrUpdateStream(ctx, libnats.StreamConfig{
 		Name:            streamName,
 		Subjects:        []string{subjectFilter},
@@ -129,7 +137,7 @@ func ensureTopology(ctx context.Context, client libnats.Client) error {
 
 	if _, err := client.Streams().CreateOrUpdateStream(ctx, libnats.StreamConfig{
 		Name:      dlqStream,
-		Subjects:  []string{"orders.dlq.>"},
+		Subjects:  []string{dlqSubjectFilter},
 		Replicas:  1,
 		Storage:   libnats.MemoryStorage,
 		Retention: libnats.LimitsPolicy,
@@ -139,8 +147,13 @@ func ensureTopology(ctx context.Context, client libnats.Client) error {
 		return fmt.Errorf("stream %s: %w", dlqStream, err)
 	}
 
-	if err := ensurePullConsumer(ctx, client); err != nil {
-		return err
+	// A work-queue stream allows only one consumer per filter subject, so the
+	// pull durable is provisioned only for the role that binds it. Creating it
+	// unconditionally makes the worker's own subscribe fail as "not unique".
+	if role == "puller" {
+		if err := ensurePullConsumer(ctx, client); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -166,7 +179,7 @@ func ensurePullConsumer(ctx context.Context, client libnats.Client) error {
 }
 
 func envOr(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
+	if v := os.Getenv(key); !bytesconv.IsEmpty(v) {
 		return v
 	}
 

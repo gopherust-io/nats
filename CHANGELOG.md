@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.3.0
+
+- Replay peek returns `StoredMessage` (sequence, subject, time, data).
+- `GetMsgRange` / `GetMsgRangeByTime` and time→seq helpers for export without moving consumers.
+- Seek bounds: `UntilSeq`, `UntilTime`, `Limit`, `OneMessage`; returned on `ReplayConsumerResult` and stored in consumer metadata.
+- `DurableConsumerConfig.Metadata` passed through to JetStream.
+- **Slow consumer detection** — `EvaluateSlowConsumer`, `WatchSlowConsumer` / `Client.WatchSlowConsumer` for sustained JetStream backlog (pending / lag / ack-pending ratio); metric `slow_consumer_detected` (distinct from backpressure `slow_consumer_events`).
+- **Consumer behavior fingerprinting** — `EvaluateBehaviorFingerprint`, `WatchBehaviorFingerprint` / `Client.WatchBehaviorFingerprint` learns normal msg/min + handling latency, then emits anomalies when throughput stays near baseline while processing regresses; metric `behavior_fingerprint_anomaly`. Snapshots publish to KV `nats_consol_fingerprints` for nats-consol Consumer Detail.
+
 ## v0.2.1
 
 - Fix zero-value JetStream enum merges: `FromBeginning()`, `WithReplayPolicy(ReplayInstant)`,

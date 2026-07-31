@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gopherust-io/nats/internal/bytesconv"
 	natspkg "github.com/nats-io/nats.go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -17,13 +18,13 @@ func TestRequestBytesRoundTrip(t *testing.T) {
 	subject := uniqueDurable(t, "rr.bytes")
 
 	_, err := client.Responder().Subscribe(ctx, subject, func(_ context.Context, msg *natspkg.Msg) error {
-		return RespondBytes(msg, append([]byte("echo:"), msg.Data...))
+		return RespondBytes(msg, append(bytesconv.StringToBytes("echo:"), msg.Data...))
 	})
 	require.NoError(t, err)
 
-	reply, err := client.Requester().RequestBytes(ctx, subject, []byte("ping"))
+	reply, err := client.Requester().RequestBytes(ctx, subject, bytesconv.StringToBytes("ping"))
 	require.NoError(t, err)
-	assert.Equal(t, []byte("echo:ping"), reply.Data)
+	assert.Equal(t, bytesconv.StringToBytes("echo:ping"), reply.Data)
 }
 
 func TestRequestJSONIntoRoundTrip(t *testing.T) {
@@ -88,7 +89,7 @@ func TestRequestTimeout(t *testing.T) {
 	})
 	subject := uniqueDurable(t, "rr.timeout")
 
-	_, err := client.Requester().RequestBytes(ctx, subject, []byte("x"))
+	_, err := client.Requester().RequestBytes(ctx, subject, bytesconv.StringToBytes("x"))
 	require.Error(t, err)
 }
 
@@ -100,7 +101,7 @@ func TestRequestQueueSubscribeOneReply(t *testing.T) {
 	var hits atomic.Int32
 	handler := func(_ context.Context, msg *natspkg.Msg) error {
 		hits.Add(1)
-		return RespondBytes(msg, []byte("ok"))
+		return RespondBytes(msg, bytesconv.StringToBytes("ok"))
 	}
 
 	_, err := client.Responder().QueueSubscribe(ctx, queue, subject, handler)
@@ -109,16 +110,16 @@ func TestRequestQueueSubscribeOneReply(t *testing.T) {
 	require.NoError(t, err)
 
 	for range 10 {
-		reply, err := client.Requester().RequestBytes(ctx, subject, []byte("x"))
+		reply, err := client.Requester().RequestBytes(ctx, subject, bytesconv.StringToBytes("x"))
 		require.NoError(t, err)
-		assert.Equal(t, []byte("ok"), reply.Data)
+		assert.Equal(t, bytesconv.StringToBytes("ok"), reply.Data)
 	}
 	assert.Equal(t, int32(10), hits.Load())
 }
 
 func TestRequestInvalidSubject(t *testing.T) {
 	client, ctx := testClient(t)
-	_, err := client.Requester().RequestBytes(ctx, "", []byte("x"))
+	_, err := client.Requester().RequestBytes(ctx, "", bytesconv.StringToBytes("x"))
 	require.Error(t, err)
 	assert.ErrorIs(t, err, ErrEmptySubjectNotAllowed)
 }
@@ -130,12 +131,12 @@ func TestRequestHeadersReachResponder(t *testing.T) {
 	seen := make(chan string, 1)
 	_, err := client.Responder().Subscribe(ctx, subject, func(_ context.Context, msg *natspkg.Msg) error {
 		seen <- msg.Header.Get("X-Test")
-		return RespondBytes(msg, []byte("ok"))
+		return RespondBytes(msg, bytesconv.StringToBytes("ok"))
 	})
 	require.NoError(t, err)
 
 	_, err = client.Requester().RequestMessage(ctx, subject, Message{
-		Data:        []byte("x"),
+		Data:        bytesconv.StringToBytes("x"),
 		MessageType: Raw,
 		Header:      map[string][]string{"X-Test": {"abc"}},
 	})
@@ -148,11 +149,11 @@ func TestRequestTracingSpan(t *testing.T) {
 	subject := uniqueDurable(t, "rr.trace")
 
 	_, err := client.Responder().Subscribe(ctx, subject, func(_ context.Context, msg *natspkg.Msg) error {
-		return RespondBytes(msg, []byte("ok"))
+		return RespondBytes(msg, bytesconv.StringToBytes("ok"))
 	})
 	require.NoError(t, err)
 
-	_, err = client.Requester().RequestBytes(ctx, subject, []byte("x"))
+	_, err = client.Requester().RequestBytes(ctx, subject, bytesconv.StringToBytes("x"))
 	require.NoError(t, err)
 
 	require.Eventually(t, func() bool {

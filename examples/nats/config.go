@@ -5,6 +5,7 @@ import (
 	"time"
 
 	libnats "github.com/gopherust-io/nats"
+	"github.com/gopherust-io/nats/internal/bytesconv"
 )
 
 const (
@@ -63,7 +64,7 @@ func prodWorkerMaxAckPending() int {
 
 func clientName(role string) string {
 	host, _ := os.Hostname()
-	if host == "" {
+	if bytesconv.IsEmpty(host) {
 		host = "local"
 	}
 

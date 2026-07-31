@@ -156,7 +156,7 @@ func TraceIDFromHeader(h natspkg.Header) string {
 // jetStreamMetadata returns parsed JetStream ack metadata, or nil when unavailable.
 // Skips parsing when Reply is empty (non-JS / test messages) to avoid Metadata allocs.
 func jetStreamMetadata(msg *natspkg.Msg) *natspkg.MsgMetadata {
-	if msg == nil || msg.Reply == "" {
+	if msg == nil || bytesconv.IsEmpty(msg.Reply) {
 		return nil
 	}
 

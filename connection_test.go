@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gopherust-io/nats/internal/bytesconv"
 	"github.com/nats-io/nats-server/v2/server"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -58,7 +59,7 @@ func TestConfigureTLSInvalidCA(t *testing.T) {
 
 	cl := &client{config: &Config{Conn: Connection{
 		Address: "nats://127.0.0.1:4222",
-		TLS:     ConnectionTLS{CA: []byte("not-a-pem")},
+		TLS:     ConnectionTLS{CA: bytesconv.StringToBytes("not-a-pem")},
 	}}}
 	_, err := cl.configureOptions()
 	require.Error(t, err)
@@ -70,7 +71,7 @@ func TestConfigureTLSIncompleteClientCert(t *testing.T) {
 
 	cl := &client{config: &Config{Conn: Connection{
 		Address: "nats://127.0.0.1:4222",
-		TLS:     ConnectionTLS{Cert: []byte("cert-only")},
+		TLS:     ConnectionTLS{Cert: bytesconv.StringToBytes("cert-only")},
 	}}}
 	_, err := cl.configureOptions()
 	require.Error(t, err)
