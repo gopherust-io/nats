@@ -58,12 +58,9 @@ type Config struct {
 	ResponderConfig ResponderConfig
 	Metrics         MetricsConfig
 	RuntimeConsumer RuntimeConsumerConfig
-	// Stream is an optional topology template for callers; NewClient does not
-	// create or update it. Provision streams via nats CLI / platform ops, or
-	// explicitly with Streams().CreateOrUpdateStream / SetupWorker.
-	Stream       StreamConfig
-	Conn         Connection
-	Backpressure BackpressureConfig
+	Stream          StreamConfig
+	Conn            Connection
+	Backpressure    BackpressureConfig
 }
 
 // ConsumerConfig is an alias kept for backward compatibility.
@@ -71,7 +68,6 @@ type ConsumerConfig = RuntimeConsumerConfig
 
 // ConnectionTLS holds optional TLS material for NATS connections.
 // Prefer PEM fields for config-file / env wiring; set Config for full control.
-// ConnectionTLS is a configured value type.
 //
 // goalign:ignore
 type ConnectionTLS struct {
@@ -88,7 +84,7 @@ type ConnectionTLS struct {
 	InsecureSkipVerify bool
 }
 
-// Connection is a configured value type.
+// Connection holds dial, auth, TLS, and reconnect settings.
 //
 // goalign:ignore
 type Connection struct {
@@ -139,29 +135,24 @@ type Connection struct {
 	DontRandomize bool
 }
 
-// RuntimeConsumerConfig is a configured value type.
+// RuntimeConsumerConfig holds push/pull worker and heartbeat settings.
 //
 // goalign:ignore
 type RuntimeConsumerConfig struct {
-	MetricPrefix     string
-	PendingMsgLimit  int
-	PendingMsgBuffer int
-	WorkerPoolSize   int
-	WorkerBufferSize int
-	AckWait          time.Duration
-	// IdleHeartbeat enables JetStream idle heartbeats on non-queue push
-	// subscriptions (and defaults pull Process heartbeats). 0 disables.
-	// Queue groups do not support idle heartbeat (nats.go limitation).
-	IdleHeartbeat     time.Duration
+	MetricPrefix      string
+	PendingMsgLimit   int
+	PendingMsgBuffer  int
+	WorkerPoolSize    int
+	WorkerBufferSize  int
+	AckWait           time.Duration
+	IdleHeartbeat     time.Duration // 0 disables; unsupported on queue groups
 	WorkerPoolEnabled bool
-	// FlowControl enables JetStream flow control on non-queue push when
-	// IdleHeartbeat > 0. Pair with IdleHeartbeat (recommended by nats.go).
-	FlowControl  bool
-	AllowMetrics bool
-	AllowTracing bool
+	FlowControl       bool
+	AllowMetrics      bool
+	AllowTracing      bool
 }
 
-// PublisherConfig is a configured value type.
+// PublisherConfig holds publish metrics and async pending limits.
 //
 // goalign:ignore
 type PublisherConfig struct {
@@ -175,7 +166,6 @@ type PublisherConfig struct {
 }
 
 // RequesterConfig configures core NATS request/reply client calls.
-// RequesterConfig is a configured value type.
 //
 // goalign:ignore
 type RequesterConfig struct {
@@ -189,7 +179,6 @@ type RequesterConfig struct {
 }
 
 // ResponderConfig configures core NATS reply subscribers.
-// ResponderConfig is a configured value type.
 //
 // goalign:ignore
 type ResponderConfig struct {
@@ -198,17 +187,14 @@ type ResponderConfig struct {
 	AllowTracing bool
 }
 
-// StreamConfig is a configured value type.
+// StreamConfig holds JetStream stream topology fields for explicit provisioning.
 //
 // goalign:ignore
 type StreamConfig struct {
-	// Mirror configures this stream as a mirror of another stream (geo / DR).
-	// Prefer nats CLI or platform ops for complex cross-domain setups; see devops.md.
-	Mirror      *StreamSource
-	Name        string
-	Description string
-	Subjects    []string
-	// Sources aggregates messages from other streams into this stream.
+	Mirror          *StreamSource
+	Name            string
+	Description     string
+	Subjects        []string
 	Sources         []*StreamSource
 	Storage         StorageType
 	MaxBytes        int64
@@ -227,7 +213,6 @@ type StreamConfig struct {
 type StreamSource = natspkg.StreamSource
 
 // KeyValueConfig configures a JetStream Key-Value bucket.
-// KeyValueConfig is a configured value type.
 //
 // goalign:ignore
 type KeyValueConfig struct {
@@ -241,7 +226,7 @@ type KeyValueConfig struct {
 	Compression bool
 }
 
-// DurableConsumerConfig is a configured value type.
+// DurableConsumerConfig holds durable consumer create/update options.
 //
 // goalign:ignore
 type DurableConsumerConfig struct {
@@ -307,7 +292,7 @@ type ReplayConfig struct {
 	limitSet        bool
 }
 
-// MetricsConfig is a configured value type.
+// MetricsConfig holds JetStream metrics collection options.
 //
 // goalign:ignore
 type MetricsConfig struct {

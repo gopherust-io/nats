@@ -347,9 +347,7 @@ func (c *consumer) wrapHandler(ctx context.Context, handler MsgHandler) MsgHandl
 		err := c.handlePoolBackpressure(msgCtx, msg)
 		switch {
 		case err == nil:
-			// proceed to enqueue
 		case errors.Is(err, ErrPoolFull):
-			// block mode: still publish and let channel block
 		case errors.Is(err, ErrBackpressureHandled):
 			return nil
 		default:

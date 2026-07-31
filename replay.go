@@ -144,7 +144,6 @@ func (r *replay) recreateDurable(ctx context.Context, stream, durable string, cf
 			return delErr
 		}
 	case errors.Is(infoErr, natspkg.ErrConsumerNotFound):
-		// create fresh
 	default:
 		return infoErr
 	}
@@ -600,7 +599,6 @@ func (r *replay) getExistingAtOrNear(
 		return nil, nextErr
 	}
 
-	// walk backward from seq
 	for prev := seq; prev >= first; prev-- {
 		m, getErr := r.streams.GetMsg(ctx, stream, prev)
 		if getErr == nil {
