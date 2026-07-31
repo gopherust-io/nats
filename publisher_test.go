@@ -5,10 +5,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gopherust-io/nats/internal/bytesconv"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/types/known/wrapperspb"
+
+	"github.com/gopherust-io/nats/internal/bytesconv"
 )
 
 func TestPublisherPublishEmptySubject(t *testing.T) {
@@ -124,7 +125,9 @@ func TestPublishBytesWithMsgIDIntegration(t *testing.T) {
 		DuplicateWindow: 2 * time.Minute,
 	})
 	require.NoError(t, err)
-	require.NoError(t, client.Publisher().PublishBytesWithMsgID(ctx, prefix+"events", uniqueDurable(t, "bytes"), bytesconv.StringToBytes("raw")))
+	require.NoError(t, client.Publisher().PublishBytesWithMsgID(
+		ctx, prefix+"events", uniqueDurable(t, "bytes"), bytesconv.StringToBytes("raw"),
+	))
 }
 
 func TestPublishAsyncIntegration(t *testing.T) {

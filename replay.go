@@ -7,9 +7,10 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/gopherust-io/nats/internal/bytesconv"
 	natspkg "github.com/nats-io/nats.go"
 	"github.com/nats-io/nuid"
+
+	"github.com/gopherust-io/nats/internal/bytesconv"
 )
 
 type Replay interface {
@@ -432,6 +433,7 @@ func (r *replay) GetMsgRange(
 					return nil, false, nextErr
 				}
 			}
+
 			break
 		}
 		if cur >= endSeq {

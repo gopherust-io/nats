@@ -4,9 +4,10 @@ import (
 	"context"
 	"strings"
 
-	"github.com/gopherust-io/nats/internal/bytesconv"
 	natspkg "github.com/nats-io/nats.go"
 	"github.com/rs/zerolog"
+
+	"github.com/gopherust-io/nats/internal/bytesconv"
 )
 
 // consumerFilterSubject resolves the pull-subscribe subject from consumer config.

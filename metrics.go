@@ -8,8 +8,9 @@ import (
 	natspkg "github.com/nats-io/nats.go"
 	"github.com/rs/zerolog"
 
-	"github.com/gopherust-io/nats/internal/bytesconv"
 	"github.com/gopherust-io/tel"
+
+	"github.com/gopherust-io/nats/internal/bytesconv"
 )
 
 // goalign:ignore

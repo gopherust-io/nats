@@ -2,8 +2,9 @@ package nats
 
 import (
 	"errors"
-	"github.com/gopherust-io/nats/internal/bytesconv"
 	"testing"
+
+	"github.com/gopherust-io/nats/internal/bytesconv"
 )
 
 func TestMetricSubjectLabel(t *testing.T) {

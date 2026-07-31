@@ -7,9 +7,10 @@ import (
 	"sort"
 	"time"
 
-	"github.com/gopherust-io/nats/internal/bytesconv"
 	natspkg "github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
+
+	"github.com/gopherust-io/nats/internal/bytesconv"
 )
 
 type ConsumerManager interface {

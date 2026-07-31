@@ -7,10 +7,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gopherust-io/nats/internal/bytesconv"
 	natspkg "github.com/nats-io/nats.go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/gopherust-io/nats/internal/bytesconv"
 )
 
 func TestFlightRecorderRingAndSnapshot(t *testing.T) {

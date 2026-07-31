@@ -7,8 +7,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/gopherust-io/nats/internal/bytesconv"
 	"github.com/rs/zerolog"
+
+	"github.com/gopherust-io/nats/internal/bytesconv"
 )
 
 const (
@@ -89,6 +90,7 @@ func (c BehaviorFingerprintConfig) withDefaults() BehaviorFingerprintConfig {
 	if out.SustainFor <= 0 {
 		out.SustainFor = defaultBehaviorSustainFor
 	}
+
 	return out
 }
 
@@ -110,6 +112,7 @@ func EvaluateBehaviorFingerprint(current, baseline BehaviorSnapshot, cfg Behavio
 	}
 
 	threshold := time.Duration(float64(baseline.Processing) * cfg.LatencyFactor)
+
 	return current.Processing >= threshold
 }
 
@@ -121,25 +124,24 @@ type behaviorSample struct {
 // BehaviorFingerprint learns normal msg/min and processing latency, then detects regressions.
 // goalign:ignore
 type BehaviorFingerprint struct {
-	sub      Subscription
-	events   chan BehaviorAnomalyEvent
-	stopCh   chan struct{}
-	metrics  *clientMetrics
-	cfg      BehaviorFingerprintConfig
-	stopOnce sync.Once
-
-	mu              sync.Mutex
-	samples         []behaviorSample
-	baselineRate    float64
-	baselineLatency time.Duration
-	haveBaseline    bool
 	startedAt       time.Time
-	totalObserved   int
-	lastCurrent     BehaviorSnapshot
-	lastReportAt    time.Time
 	breachStart     time.Time
-	haveBreach      bool
+	lastReportAt    time.Time
+	sub             Subscription
+	events          chan BehaviorAnomalyEvent
+	stopCh          chan struct{}
+	metrics         *clientMetrics
+	samples         []behaviorSample
+	cfg             BehaviorFingerprintConfig
+	lastCurrent     BehaviorSnapshot
+	baselineRate    float64
+	totalObserved   int
+	baselineLatency time.Duration
+	stopOnce        sync.Once
+	mu              sync.Mutex
 	anomalous       atomic.Bool
+	haveBaseline    bool
+	haveBreach      bool
 }
 
 // WatchBehaviorFingerprint starts learning baselines from Observe samples.
@@ -164,6 +166,7 @@ func WatchBehaviorFingerprint(
 		startedAt: time.Now(),
 	}
 	go bf.loop(ctx)
+
 	return bf, nil
 }
 
@@ -189,17 +192,14 @@ func (b *BehaviorFingerprint) Events() <-chan BehaviorAnomalyEvent { return b.ev
 func (b *BehaviorFingerprint) Anomalous() bool { return b.anomalous.Load() }
 
 // Snapshot returns the learned baseline, latest window stats, and whether a baseline exists.
-func (b *BehaviorFingerprint) Snapshot() (normal, current BehaviorSnapshot, ready bool) {
+func (b *BehaviorFingerprint) Snapshot() (BehaviorSnapshot, BehaviorSnapshot, bool) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	normal = BehaviorSnapshot{
+	return BehaviorSnapshot{
 		MsgPerMin:  b.baselineRate,
 		Processing: b.baselineLatency,
-	}
-	current = b.lastCurrent
-	ready = b.haveBaseline
-	return normal, current, ready
+	}, b.lastCurrent, b.haveBaseline
 }
 
 // Stop ends the watch loop.
@@ -250,6 +250,7 @@ func (b *BehaviorFingerprint) tick(ctx context.Context) {
 		b.haveBreach = false
 		b.breachStart = time.Time{}
 		b.mu.Unlock()
+
 		return
 	}
 
@@ -270,6 +271,7 @@ func (b *BehaviorFingerprint) tick(ctx context.Context) {
 		if shouldReport {
 			b.reportKV(ctx, false, stream, durable, reportNormal, reportCurrent, 0)
 		}
+
 		return
 	}
 
@@ -280,10 +282,12 @@ func (b *BehaviorFingerprint) tick(ctx context.Context) {
 	sustained := now.Sub(b.breachStart)
 	if sustained < b.cfg.SustainFor {
 		b.mu.Unlock()
+
 		return
 	}
 	if b.anomalous.Load() && !b.cfg.CircuitStop {
 		b.mu.Unlock()
+
 		return
 	}
 
@@ -330,6 +334,7 @@ func (b *BehaviorFingerprint) shouldReportLocked(now time.Time) bool {
 	if b.lastReportAt.IsZero() {
 		return true
 	}
+
 	return now.Sub(b.lastReportAt) >= b.cfg.Window
 }
 
@@ -366,6 +371,7 @@ func (b *BehaviorFingerprint) updateBaselineLocked(current BehaviorSnapshot, alp
 		b.baselineRate = current.MsgPerMin
 		b.baselineLatency = current.Processing
 		b.haveBaseline = true
+
 		return
 	}
 	b.baselineRate = ewmaFloat(b.baselineRate, current.MsgPerMin, alpha)
@@ -406,13 +412,14 @@ func (b *BehaviorFingerprint) windowStatsLocked(now time.Time) BehaviorSnapshot 
 	}
 	// Fixed window denominator keeps msg/min stable once observe cadence is steady.
 	msgPerMin := float64(n) / window.Minutes()
+
 	return BehaviorSnapshot{
 		MsgPerMin:  msgPerMin,
 		Processing: mean,
 	}
 }
 
-func (b *BehaviorFingerprint) identityLocked() (stream, durable string) {
+func (b *BehaviorFingerprint) identityLocked() (string, string) {
 	if b.sub == nil {
 		return "", ""
 	}
@@ -420,6 +427,7 @@ func (b *BehaviorFingerprint) identityLocked() (stream, durable string) {
 	if err != nil || info == nil {
 		return "", ""
 	}
+
 	return info.Stream, info.Name
 }
 
@@ -443,6 +451,7 @@ func nearBehaviorBaseline(current, baseline BehaviorSnapshot, cfg BehaviorFinger
 	}
 	lo := baseline.MsgPerMin * (1 - cfg.RateTolerance)
 	hi := baseline.MsgPerMin * (1 + cfg.RateTolerance)
+
 	return current.MsgPerMin >= lo && current.MsgPerMin <= hi
 }
 
@@ -450,6 +459,7 @@ func ewmaFloat(prev, sample, alpha float64) float64 {
 	if prev == 0 {
 		return sample
 	}
+
 	return alpha*sample + (1-alpha)*prev
 }
 

@@ -4,9 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/gopherust-io/nats/internal/bytesconv"
 	"strings"
 	"time"
+
+	"github.com/gopherust-io/nats/internal/bytesconv"
 )
 
 // DefaultBehaviorFingerprintKVBucket is the JetStream KV bucket nats-consol reads
@@ -20,6 +21,7 @@ type BehaviorFingerprintKVSnapshot struct {
 }
 
 // BehaviorFingerprintKVPayload is stored at key stream/durable in the fingerprint bucket.
+// goalign:ignore
 type BehaviorFingerprintKVPayload struct {
 	UpdatedAt      time.Time                     `json:"updatedAt"`
 	Stream         string                        `json:"stream"`
@@ -63,6 +65,7 @@ func MarshalBehaviorFingerprintKV(
 		SustainedForMs: sustained.Milliseconds(),
 		UpdatedAt:      at.UTC(),
 	}
+
 	return json.Marshal(payload)
 }
 
@@ -87,5 +90,6 @@ func ReportBehaviorFingerprintKV(
 		return err
 	}
 	_, err = keys.Put(ctx, bucket, BehaviorFingerprintKVKey(stream, durable), raw)
+
 	return err
 }

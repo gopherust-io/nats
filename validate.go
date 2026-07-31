@@ -2,10 +2,11 @@ package nats
 
 import (
 	"fmt"
-	"github.com/gopherust-io/nats/internal/bytesconv"
 	"regexp"
 	"strings"
 	"unicode"
+
+	"github.com/gopherust-io/nats/internal/bytesconv"
 )
 
 // validBucketRe matches JetStream KV bucket names (nats.go validBucketRe).

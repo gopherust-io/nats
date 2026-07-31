@@ -7,8 +7,9 @@ import (
 	natspkg "github.com/nats-io/nats.go"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
-	"github.com/gopherust-io/nats/internal/bytesconv"
 	"github.com/gopherust-io/tel"
+
+	"github.com/gopherust-io/nats/internal/bytesconv"
 )
 
 func BenchmarkPublishJSON(b *testing.B) {

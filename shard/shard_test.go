@@ -3,8 +3,9 @@ package shard
 import (
 	"testing"
 
-	"github.com/gopherust-io/nats/internal/bytesconv"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/gopherust-io/nats/internal/bytesconv"
 )
 
 func TestIndexStable(t *testing.T) {

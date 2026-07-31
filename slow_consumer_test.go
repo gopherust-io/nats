@@ -36,7 +36,7 @@ func TestEvaluateSlowConsumer(t *testing.T) {
 	assert.True(t, slow)
 	assert.Equal(t, []string{SlowReasonAckPending}, reasons)
 
-	slow, reasons = EvaluateSlowConsumer(0, 0, 89, 100, cfg)
+	slow, _ = EvaluateSlowConsumer(0, 0, 89, 100, cfg)
 	assert.False(t, slow)
 
 	// MaxAckPending <= 0 disables ack-pending check.
@@ -56,8 +56,8 @@ func TestConsumerLagMessages(t *testing.T) {
 }
 
 type slowInfoSub struct {
-	fakeSub
 	info atomic.Pointer[natspkg.ConsumerInfo]
+	fakeSub
 }
 
 func (s *slowInfoSub) ConsumerInfo() (*natspkg.ConsumerInfo, error) {

@@ -6,8 +6,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/gopherust-io/nats/internal/bytesconv"
 	"github.com/gopherust-io/tel"
+
+	"github.com/gopherust-io/nats/internal/bytesconv"
 )
 
 // metricSubjectLabel blanks the subject when fixedCardinality metrics are enabled.

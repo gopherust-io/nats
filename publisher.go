@@ -5,10 +5,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/gopherust-io/nats/internal/bytesconv"
 	natspkg "github.com/nats-io/nats.go"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/gopherust-io/nats/internal/bytesconv"
 )
 
 // PubAckFuture is a future for an async JetStream publish ack.

@@ -2,9 +2,10 @@ package nats
 
 import (
 	"fmt"
-	"github.com/gopherust-io/nats/internal/bytesconv"
 	"net/url"
 	"strings"
+
+	"github.com/gopherust-io/nats/internal/bytesconv"
 )
 
 // validateAuthConfig ensures at most one auth mechanism is configured.

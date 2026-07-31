@@ -9,7 +9,7 @@ import "unsafe"
 
 // IsEmpty reports whether s has length 0.
 func IsEmpty(s string) bool {
-	return len(s) == 0
+	return s == ""
 }
 
 // StringToBytes returns a read-only view of s as a []byte without copying.

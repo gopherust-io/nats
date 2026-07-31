@@ -6,8 +6,9 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/gopherust-io/nats/internal/bytesconv"
 	natspkg "github.com/nats-io/nats.go"
+
+	"github.com/gopherust-io/nats/internal/bytesconv"
 )
 
 // StreamManager manages JetStream streams (≤10 methods for interfacebloat).

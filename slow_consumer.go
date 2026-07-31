@@ -7,8 +7,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/gopherust-io/nats/internal/bytesconv"
 	"github.com/rs/zerolog"
+
+	"github.com/gopherust-io/nats/internal/bytesconv"
 )
 
 const (
@@ -65,6 +66,7 @@ func (c SlowConsumerConfig) withDefaults() SlowConsumerConfig {
 	if out.AckPendingRatio <= 0 {
 		out.AckPendingRatio = defaultSlowConsumerAckPendingRatio
 	}
+
 	return out
 }
 
@@ -83,8 +85,9 @@ type SlowConsumerEvent struct {
 // EvaluateSlowConsumer returns whether thresholds are met and why.
 // Thresholds of 0 mean "use defaults" via withDefaults on cfg first, or pass
 // an already-defaulted config.
-func EvaluateSlowConsumer(pending, lag uint64, ackPending, maxAckPending int, cfg SlowConsumerConfig) (slow bool, reasons []string) {
+func EvaluateSlowConsumer(pending, lag uint64, ackPending, maxAckPending int, cfg SlowConsumerConfig) (bool, []string) {
 	cfg = cfg.withDefaults()
+	var reasons []string
 	if pending >= cfg.PendingThreshold {
 		reasons = append(reasons, SlowReasonPending)
 	}
@@ -100,6 +103,7 @@ func EvaluateSlowConsumer(pending, lag uint64, ackPending, maxAckPending int, cf
 			reasons = append(reasons, SlowReasonAckPending)
 		}
 	}
+
 	return len(reasons) > 0, reasons
 }
 
@@ -108,6 +112,7 @@ func ConsumerLagMessages(streamLastSeq, deliveredStreamSeq uint64) uint64 {
 	if streamLastSeq <= deliveredStreamSeq {
 		return 0
 	}
+
 	return streamLastSeq - deliveredStreamSeq
 }
 
@@ -147,6 +152,7 @@ func WatchSlowConsumer(
 		stopCh:        make(chan struct{}),
 	}
 	go sc.loop(ctx)
+
 	return sc, nil
 }
 
@@ -180,6 +186,7 @@ func (s *SlowConsumer) loop(ctx context.Context) {
 			info, err := s.sub.ConsumerInfo()
 			if err != nil || info == nil {
 				haveBreach = false
+
 				continue
 			}
 
@@ -199,6 +206,7 @@ func (s *SlowConsumer) loop(ctx context.Context) {
 			)
 			if !slowNow {
 				haveBreach = false
+
 				continue
 			}
 
@@ -274,8 +282,10 @@ func (c *client) WatchSlowConsumer(
 			if err != nil || info == nil {
 				return 0, err
 			}
+
 			return info.State.LastSeq, nil
 		}
 	}
+
 	return WatchSlowConsumer(ctx, sub, lastSeq, cfg, c.metrics)
 }

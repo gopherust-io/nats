@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/gopherust-io/nats/internal/bytesconv"
 	natspkg "github.com/nats-io/nats.go"
+
+	"github.com/gopherust-io/nats/internal/bytesconv"
 )
 
 // Ack helpers wrap nats.go JetStream ack primitives for long-running and poison handlers.

@@ -207,6 +207,21 @@ linters:
       - path: soft_liveness\.go
         linters:
           - govet
+      - path: behavior_fingerprint\.go
+        linters:
+          - cyclop
+          - gocyclo
+          - nestif
+      - path: slow_consumer\.go
+        linters:
+          - gocognit
+          - nestif
+      - path: replay\.go
+        linters:
+          - cyclop
+          - gocognit
+          - gocyclo
+          - nestif
       - path: dlq_reexport\.go
         linters:
           - govet

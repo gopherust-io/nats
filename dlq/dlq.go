@@ -7,8 +7,9 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/gopherust-io/nats/internal/bytesconv"
 	natspkg "github.com/nats-io/nats.go"
+
+	"github.com/gopherust-io/nats/internal/bytesconv"
 )
 
 // Header keys attached when routing a poison message.

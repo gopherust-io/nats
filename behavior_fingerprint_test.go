@@ -53,8 +53,8 @@ func TestEvaluateBehaviorFingerprint(t *testing.T) {
 }
 
 type behaviorInfoSub struct {
-	fakeSub
 	info atomic.Pointer[natspkg.ConsumerInfo]
+	fakeSub
 }
 
 func (s *behaviorInfoSub) ConsumerInfo() (*natspkg.ConsumerInfo, error) {

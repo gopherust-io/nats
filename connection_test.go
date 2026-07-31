@@ -6,10 +6,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gopherust-io/nats/internal/bytesconv"
 	"github.com/nats-io/nats-server/v2/server"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/gopherust-io/nats/internal/bytesconv"
 )
 
 func TestConfigureOptionsNoReconnect(t *testing.T) {
