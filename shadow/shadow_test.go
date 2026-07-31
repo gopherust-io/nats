@@ -8,6 +8,8 @@ import (
 	natspkg "github.com/nats-io/nats.go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/gopherust-io/nats/internal/bytesconv"
 )
 
 type memRecorder struct {
@@ -30,7 +32,7 @@ func TestWithPrimaryDrivesFate(t *testing.T) {
 		return nil
 	})
 
-	err := h(context.Background(), &natspkg.Msg{Subject: "orders.x", Data: []byte("1")})
+	err := h(context.Background(), &natspkg.Msg{Subject: "orders.x", Data: bytesconv.StringToBytes("1")})
 	require.ErrorIs(t, err, want)
 	assert.True(t, shadowCalled)
 }
@@ -44,7 +46,7 @@ func TestWithMismatchRecorded(t *testing.T) {
 		return errors.New("shadow diverged")
 	})
 
-	require.NoError(t, h(context.Background(), &natspkg.Msg{Subject: "a", Data: []byte("x")}))
+	require.NoError(t, h(context.Background(), &natspkg.Msg{Subject: "a", Data: bytesconv.StringToBytes("x")}))
 	require.NotEmpty(t, rec.events)
 	found := false
 	for _, ev := range rec.events {
@@ -64,7 +66,7 @@ func TestWithPanicRecovered(t *testing.T) {
 		panic("boom")
 	})
 
-	require.NoError(t, h(context.Background(), &natspkg.Msg{Subject: "a", Data: []byte("x")}))
+	require.NoError(t, h(context.Background(), &natspkg.Msg{Subject: "a", Data: bytesconv.StringToBytes("x")}))
 	require.NotEmpty(t, rec.events)
 	assert.Equal(t, "shadow_error", rec.events[0].detail)
 }
@@ -73,7 +75,7 @@ func TestCloneMsgOmitsReply(t *testing.T) {
 	t.Parallel()
 	orig := &natspkg.Msg{
 		Subject: "s",
-		Data:    []byte("hi"),
+		Data:    bytesconv.StringToBytes("hi"),
 		Reply:   "_INBOX.ack",
 		Header:  natspkg.Header{"K": []string{"v"}},
 	}

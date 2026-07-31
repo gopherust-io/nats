@@ -9,6 +9,8 @@ import (
 	"time"
 
 	natspkg "github.com/nats-io/nats.go"
+
+	"github.com/gopherust-io/nats/internal/bytesconv"
 )
 
 type PullConsumer interface {
@@ -80,7 +82,7 @@ func (c *consumer) Pull(stream, durable string) (PullConsumer, error) {
 		err error
 	)
 
-	if durable != empty {
+	if !bytesconv.IsEmpty(durable) {
 		if verr := ValidateDurableName(durable); verr != nil {
 			return nil, fmt.Errorf("pull stream=%q durable=%q: %w", stream, durable, verr)
 		}

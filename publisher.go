@@ -8,6 +8,8 @@ import (
 	natspkg "github.com/nats-io/nats.go"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/gopherust-io/nats/internal/bytesconv"
 )
 
 // PubAckFuture is a future for an async JetStream publish ack.
@@ -147,7 +149,7 @@ func (p *publisher) publishMsg(subject string, prep preparedPublish) error {
 		hdr = make(natspkg.Header)
 	}
 
-	if id := hdr.Get(HeaderMsgID); id != "" {
+	if id := hdr.Get(HeaderMsgID); !bytesconv.IsEmpty(id) {
 		pubOpts = append(pubOpts, natspkg.MsgId(id))
 	}
 
@@ -172,7 +174,7 @@ func (p *publisher) publishAsyncMsg(subject string, prep preparedPublish) (PubAc
 		hdr = make(natspkg.Header)
 	}
 
-	if id := hdr.Get(HeaderMsgID); id != "" {
+	if id := hdr.Get(HeaderMsgID); !bytesconv.IsEmpty(id) {
 		pubOpts = append(pubOpts, natspkg.MsgId(id))
 	}
 
@@ -190,10 +192,10 @@ func publishOptsFromMessage(msg Message) []natspkg.PubOpt {
 
 	e := msg.Expect
 	opts := make([]natspkg.PubOpt, 0, 4)
-	if e.Stream != empty {
+	if !bytesconv.IsEmpty(e.Stream) {
 		opts = append(opts, natspkg.ExpectStream(e.Stream))
 	}
-	if e.LastMsgID != empty {
+	if !bytesconv.IsEmpty(e.LastMsgID) {
 		opts = append(opts, natspkg.ExpectLastMsgId(e.LastMsgID))
 	}
 	if e.LastSeq != nil {

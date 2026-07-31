@@ -2,9 +2,17 @@
 
 JetStream client for Go. Telemetry is optional via [tel](https://github.com/gopherust-io/tel).
 
+Designed for teams that want explicit JetStream topology ownership and predictable runtime behavior in production services.
+
 Module: [`github.com/gopherust-io/nats`](https://github.com/gopherust-io/nats)
 
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/gopherust-io/nats/badge)](https://scorecard.dev/viewer/?uri=github.com/gopherust-io/nats)
+
+Latest stable release: see [GitHub Releases](https://github.com/gopherust-io/nats/releases).
+
+Quick links: [Getting started](docs/getting-started.md) · [API reference](docs/nats/api-reference.md) · [Compatibility](docs/compatibility.md)
+
+---
 
 **Mental model:** the app **connects and binds**. Ops **owns streams** (CLI/platform). If no stream captures the subject, the message is **not retained**—that is topology, not a client bug.
 
@@ -164,6 +172,12 @@ make test
 | [API reference](docs/nats/api-reference.md) | Binding, middleware, presets |
 
 [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md)
+
+## Compatibility and support
+
+- Supported Go/NATS versions are tracked in [docs/compatibility.md](docs/compatibility.md).
+- `main` is active development; use tagged releases for production.
+- Stream topology is intentionally externalized (CLI/platform) for operational control.
 
 ## License
 

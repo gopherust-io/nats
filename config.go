@@ -246,6 +246,7 @@ type KeyValueConfig struct {
 // goalign:ignore
 type DurableConsumerConfig struct {
 	OptStartTime      *time.Time
+	Metadata          map[string]string
 	Durable           string
 	FilterSubject     string
 	FilterSubjects    []string
@@ -288,16 +289,22 @@ type BackpressureConfig struct {
 // goalign:ignore
 type ReplayConfig struct {
 	OptStartTime    *time.Time
+	UntilTime       *time.Time
 	Durable         string // target durable for CreateReplayConsumer; ignored by ResetConsumer
 	FilterSubject   string
 	FilterSubjects  []string
 	DeliverPolicy   DeliverPolicy
 	ReplayPolicy    ReplayPolicy
 	OptStartSeq     uint64
+	UntilSeq        uint64
+	Limit           int
 	deliverSet      bool
 	replaySet       bool
 	optStartSeqSet  bool
 	optStartTimeSet bool
+	untilSeqSet     bool
+	untilTimeSet    bool
+	limitSet        bool
 }
 
 // MetricsConfig is a configured value type.

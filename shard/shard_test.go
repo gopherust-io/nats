@@ -4,6 +4,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/gopherust-io/nats/internal/bytesconv"
 )
 
 func TestIndexStable(t *testing.T) {
@@ -34,7 +36,7 @@ func TestSubjectFormat(t *testing.T) {
 		assert.Contains(t, subject, tt.prefix+".")
 		idx := Index(tt.key, tt.shards)
 		assert.Contains(t, subject, itoa(idx))
-		if tt.action != "" {
+		if !bytesconv.IsEmpty(tt.action) {
 			assert.Contains(t, subject, "."+tt.action)
 		}
 	}

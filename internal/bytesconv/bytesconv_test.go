@@ -5,6 +5,15 @@ import (
 	"testing"
 )
 
+func TestIsEmpty(t *testing.T) {
+	if !IsEmpty("") {
+		t.Fatal("IsEmpty(\"\") = false, want true")
+	}
+	if IsEmpty("x") {
+		t.Fatal("IsEmpty(\"x\") = true, want false")
+	}
+}
+
 func TestStringToBytesEmpty(t *testing.T) {
 	if got := StringToBytes(""); got != nil {
 		t.Fatalf("StringToBytes(\"\") = %v, want nil", got)

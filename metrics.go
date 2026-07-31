@@ -9,25 +9,29 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/gopherust-io/tel"
+
+	"github.com/gopherust-io/nats/internal/bytesconv"
 )
 
 // goalign:ignore
 type clientMetrics struct {
 	registry *tel.Registry
 
-	connectionState     *tel.FastGauge
-	reconnectCount      *tel.FastCounter
-	connectionInBytes   *tel.FastCounter
-	connectionOutBytes  *tel.FastCounter
-	connectionErrors    *tel.FastCounter
-	lameDuckEvents      *tel.FastCounter
-	idleHeartbeatMisses *tel.FastCounter
-	resubscribeTotal    *tel.FastCounter
-	supervisorGiveUp    *tel.FastCounter
-	consumerStall       *tel.FastCounter
-	connectionRTT       *tel.FastHistogram
-	jsMemoryBytes       *tel.FastGauge
-	jsStorageBytes      *tel.FastGauge
+	connectionState            *tel.FastGauge
+	reconnectCount             *tel.FastCounter
+	connectionInBytes          *tel.FastCounter
+	connectionOutBytes         *tel.FastCounter
+	connectionErrors           *tel.FastCounter
+	lameDuckEvents             *tel.FastCounter
+	idleHeartbeatMisses        *tel.FastCounter
+	resubscribeTotal           *tel.FastCounter
+	supervisorGiveUp           *tel.FastCounter
+	consumerStall              *tel.FastCounter
+	slowConsumerDetected       *tel.FastCounter
+	behaviorFingerprintAnomaly *tel.FastCounter
+	connectionRTT              *tel.FastHistogram
+	jsMemoryBytes              *tel.FastGauge
+	jsStorageBytes             *tel.FastGauge
 
 	publishTotal   *tel.FastCounter
 	publishErrors  *tel.FastCounter
@@ -82,7 +86,7 @@ func newClientMetrics(ctx context.Context, cfg MetricsConfig) *clientMetrics {
 	}
 
 	prefix := cfg.Prefix
-	if prefix == "" {
+	if bytesconv.IsEmpty(prefix) {
 		prefix = defaultMetricPrefix
 	}
 
@@ -168,6 +172,20 @@ func newClientMetrics(ctx context.Context, cfg MetricsConfig) *clientMetrics {
 		var err error
 
 		cm.consumerStall, err = registry.Counter(prefix + "/consumer_stall")
+
+		return err
+	})
+	must(prefix+"/slow_consumer_detected", func() error {
+		var err error
+
+		cm.slowConsumerDetected, err = registry.Counter(prefix + "/slow_consumer_detected")
+
+		return err
+	})
+	must(prefix+"/behavior_fingerprint_anomaly", func() error {
+		var err error
+
+		cm.behaviorFingerprintAnomaly, err = registry.Counter(prefix + "/behavior_fingerprint_anomaly")
 
 		return err
 	})

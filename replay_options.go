@@ -5,6 +5,36 @@ import "time"
 // ReplayOpt configures ResetConsumer / CreateReplayConsumer.
 type ReplayOpt func(*ReplayConfig)
 
+// MsgRangeOpt configures GetMsgRange / GetMsgRangeByTime.
+type MsgRangeOpt func(*msgRangeConfig)
+
+type msgRangeConfig struct {
+	max int
+}
+
+// WithMaxMessages caps how many messages a range fetch may return (default DefaultMsgRangeMax).
+func WithMaxMessages(n int) MsgRangeOpt {
+	return func(c *msgRangeConfig) {
+		if n > 0 {
+			c.max = n
+		}
+	}
+}
+
+func applyMsgRangeOpts(opts []MsgRangeOpt) msgRangeConfig {
+	cfg := msgRangeConfig{max: DefaultMsgRangeMax}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(&cfg)
+		}
+	}
+	if cfg.max <= 0 {
+		cfg.max = DefaultMsgRangeMax
+	}
+
+	return cfg
+}
+
 // WithReplayDurable sets the side-car durable name for CreateReplayConsumer.
 // Ignored by ResetConsumer (which uses the durable argument).
 func WithReplayDurable(name string) ReplayOpt {
@@ -106,6 +136,47 @@ func FromNew() ReplayOpt {
 		c.optStartSeqSet = true
 		c.OptStartTime = nil
 		c.optStartTimeSet = true
+	}
+}
+
+// UntilSeq records an inclusive end sequence bound (client/metadata; JetStream has no server end).
+func UntilSeq(seq uint64) ReplayOpt {
+	return func(c *ReplayConfig) {
+		c.UntilSeq = seq
+		c.untilSeqSet = true
+	}
+}
+
+// UntilTime records an inclusive end timestamp bound (resolved to seq when seeking when possible).
+func UntilTime(t time.Time) ReplayOpt {
+	return func(c *ReplayConfig) {
+		ts := t
+		c.UntilTime = &ts
+		c.untilTimeSet = true
+	}
+}
+
+// Limit records a max message count bound for the intended replay window.
+func Limit(n int) ReplayOpt {
+	return func(c *ReplayConfig) {
+		c.Limit = n
+		c.limitSet = true
+	}
+}
+
+// OneMessage seeks to deliver exactly one stored message at seq.
+func OneMessage(seq uint64) ReplayOpt {
+	return func(c *ReplayConfig) {
+		c.DeliverPolicy = DeliverByStartSequence
+		c.deliverSet = true
+		c.OptStartSeq = seq
+		c.optStartSeqSet = true
+		c.OptStartTime = nil
+		c.optStartTimeSet = true
+		c.UntilSeq = seq
+		c.untilSeqSet = true
+		c.Limit = 1
+		c.limitSet = true
 	}
 }
 

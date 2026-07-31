@@ -7,6 +7,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/types/known/wrapperspb"
+
+	"github.com/gopherust-io/nats/internal/bytesconv"
 )
 
 func TestCodecJSONRoundTrip(t *testing.T) {
@@ -63,7 +65,7 @@ func TestEncodeErrors(t *testing.T) {
 }
 
 func TestDecodeErrors(t *testing.T) {
-	err := Decode([]byte("{}"), MessageType(0), &struct{}{})
+	err := Decode(bytesconv.StringToBytes("{}"), MessageType(0), &struct{}{})
 	require.Error(t, err)
 	require.ErrorIs(t, err, ErrInvalidMessageType)
 

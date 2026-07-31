@@ -3,6 +3,8 @@ package nats
 import (
 	"errors"
 	"testing"
+
+	"github.com/gopherust-io/nats/internal/bytesconv"
 )
 
 func TestMetricSubjectLabel(t *testing.T) {
@@ -15,7 +17,7 @@ func TestMetricSubjectLabel(t *testing.T) {
 		t.Fatalf("cardinality off: got %q", got)
 	}
 	m.fixedCardinality = true
-	if got := metricSubjectLabel(m, "orders.x"); got != empty {
+	if got := metricSubjectLabel(m, "orders.x"); !bytesconv.IsEmpty(got) {
 		t.Fatalf("cardinality on: got %q want empty", got)
 	}
 }

@@ -8,6 +8,8 @@ import (
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	"github.com/gopherust-io/tel"
+
+	"github.com/gopherust-io/nats/internal/bytesconv"
 )
 
 // Core request/reply must not use subjects captured by a JetStream stream:
@@ -56,7 +58,7 @@ func setupRequestBench(b *testing.B, withMetrics bool, subject string) (Client, 
 func BenchmarkRequestBytes(b *testing.B) {
 	subject := "rr.bench.bytes"
 	client, ctx := setupRequestBench(b, false, subject)
-	payload := []byte(`ping`)
+	payload := bytesconv.StringToBytes(`ping`)
 	b.ReportAllocs()
 	b.ResetTimer()
 	for b.Loop() {
@@ -64,7 +66,7 @@ func BenchmarkRequestBytes(b *testing.B) {
 		if err != nil {
 			b.Fatal(err)
 		}
-		if string(reply.Data) != "ping" {
+		if bytesconv.BytesToString(reply.Data) != "ping" {
 			b.Fatalf("got %q", reply.Data)
 		}
 	}
@@ -118,7 +120,7 @@ func BenchmarkRequestProto(b *testing.B) {
 func BenchmarkRequestBytesWithMetrics(b *testing.B) {
 	subject := "rr.bench.bytes.metrics"
 	client, ctx := setupRequestBench(b, true, subject)
-	payload := []byte(`ping`)
+	payload := bytesconv.StringToBytes(`ping`)
 	b.ReportAllocs()
 	b.ResetTimer()
 	for b.Loop() {

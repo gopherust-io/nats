@@ -8,6 +8,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/types/known/wrapperspb"
+
+	"github.com/gopherust-io/nats/internal/bytesconv"
 )
 
 func TestPublisherPublishEmptySubject(t *testing.T) {
@@ -110,7 +112,7 @@ func TestPublishBytesIntegration(t *testing.T) {
 		Name: stream, Subjects: []string{prefix + ">"}, Replicas: 1,
 	})
 	require.NoError(t, err)
-	require.NoError(t, client.Publisher().PublishBytes(ctx, prefix+"events", []byte(`{"id":"1"}`)))
+	require.NoError(t, client.Publisher().PublishBytes(ctx, prefix+"events", bytesconv.StringToBytes(`{"id":"1"}`)))
 }
 
 func TestPublishBytesWithMsgIDIntegration(t *testing.T) {
@@ -123,7 +125,9 @@ func TestPublishBytesWithMsgIDIntegration(t *testing.T) {
 		DuplicateWindow: 2 * time.Minute,
 	})
 	require.NoError(t, err)
-	require.NoError(t, client.Publisher().PublishBytesWithMsgID(ctx, prefix+"events", uniqueDurable(t, "bytes"), []byte("raw")))
+	require.NoError(t, client.Publisher().PublishBytesWithMsgID(
+		ctx, prefix+"events", uniqueDurable(t, "bytes"), bytesconv.StringToBytes("raw"),
+	))
 }
 
 func TestPublishAsyncIntegration(t *testing.T) {
@@ -136,7 +140,7 @@ func TestPublishAsyncIntegration(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	future, err := client.Publisher().PublishAsyncBytes(ctx, prefix+"events", []byte("async"))
+	future, err := client.Publisher().PublishAsyncBytes(ctx, prefix+"events", bytesconv.StringToBytes("async"))
 	require.NoError(t, err)
 
 	select {

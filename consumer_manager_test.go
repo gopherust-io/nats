@@ -62,6 +62,15 @@ func TestToNatsConsumerConfigCustom(t *testing.T) {
 	assert.Equal(t, &start, cc.OptStartTime)
 }
 
+func TestToNatsConsumerConfigMetadata(t *testing.T) {
+	cc := toNatsConsumerConfig(DurableConsumerConfig{
+		Durable:  "worker",
+		Metadata: map[string]string{MetaReplayUntilSeq: "10", MetaReplayLimit: "1"},
+	})
+	assert.Equal(t, "10", cc.Metadata[MetaReplayUntilSeq])
+	assert.Equal(t, "1", cc.Metadata[MetaReplayLimit])
+}
+
 func TestToNatsConsumerConfigAckNonePreserved(t *testing.T) {
 	cc := toNatsConsumerConfig(DurableConsumerConfig{
 		Durable:      "fire-forget",

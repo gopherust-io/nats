@@ -5,6 +5,8 @@ import (
 	"regexp"
 	"strings"
 	"unicode"
+
+	"github.com/gopherust-io/nats/internal/bytesconv"
 )
 
 // validBucketRe matches JetStream KV bucket names (nats.go validBucketRe).
@@ -53,7 +55,7 @@ func ValidateQueueName(name string) error {
 // ValidateBucketName checks JetStream KV bucket naming rules
 // (alphanumeric, underscore, hyphen only).
 func ValidateBucketName(name string) error {
-	if name == empty {
+	if bytesconv.IsEmpty(name) {
 		return fmt.Errorf("%w: bucket name is empty", ErrInvalidBucketName)
 	}
 
@@ -70,7 +72,7 @@ func ValidateBucketName(name string) error {
 
 // ValidateKVKey checks JetStream KV key naming rules.
 func ValidateKVKey(key string) error {
-	if key == empty {
+	if bytesconv.IsEmpty(key) {
 		return fmt.Errorf("%w: key is empty", ErrInvalidKVKey)
 	}
 
@@ -120,7 +122,7 @@ func ValidateSubjects(subjects []string) error {
 }
 
 func validateAssetName(name, kind string) error {
-	if name == empty {
+	if bytesconv.IsEmpty(name) {
 		return fmt.Errorf("%s name is empty", kind)
 	}
 
@@ -142,7 +144,7 @@ func validateAssetName(name, kind string) error {
 }
 
 func validateSubject(subject string, allowWildcards bool) error {
-	if subject == empty {
+	if bytesconv.IsEmpty(subject) {
 		return fmt.Errorf("subject is empty")
 	}
 

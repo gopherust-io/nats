@@ -111,8 +111,40 @@ func runWorker(ctx context.Context, client libnats.Client, telem *tel.Telemetry)
 		return fmt.Errorf("soft liveness: %w", err)
 	}
 
+	if _, err := client.KV().CreateOrUpdate(ctx, libnats.KeyValueConfig{
+		Bucket:      libnats.DefaultBehaviorFingerprintKVBucket,
+		Description: "nats-consol consumer behavior fingerprints",
+		History:     1,
+	}); err != nil {
+		live.Stop()
+		_ = sub.Stop()
+
+		return fmt.Errorf("fingerprint kv bucket: %w", err)
+	}
+
+	fp, err := client.WatchBehaviorFingerprint(ctx, sub, libnats.BehaviorFingerprintConfig{
+		ReportBucket: libnats.DefaultBehaviorFingerprintKVBucket,
+		OnAnomaly: func(ev libnats.BehaviorAnomalyEvent) {
+			zerolog.Ctx(ctx).Warn().
+				Str("stream", ev.Stream).
+				Str("durable", ev.Durable).
+				Float64("normal_msg_per_min", ev.Normal.MsgPerMin).
+				Dur("normal_processing", ev.Normal.Processing).
+				Float64("current_msg_per_min", ev.Current.MsgPerMin).
+				Dur("current_processing", ev.Current.Processing).
+				Msg("behavior fingerprint anomaly")
+		},
+	})
+	if err != nil {
+		live.Stop()
+		_ = sub.Stop()
+
+		return fmt.Errorf("behavior fingerprint: %w", err)
+	}
+
 	go func() {
 		<-ctx.Done()
+		fp.Stop()
 		live.Stop()
 		_ = sub.Stop()
 		dumpFlightRecorder(ctx, rec)

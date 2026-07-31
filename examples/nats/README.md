@@ -120,7 +120,15 @@ ROLE=puller go run ./examples/nats
 
 # Throughput-oriented publish (raw bytes + Msg-Id)
 ROLE=publisher CODEC=bytes go run ./examples/nats
+
+# Own names and subjects, so the example never reshapes a stream it does not own
+STREAM_NAME=ORDERS_FP SUBJECT_PREFIX=ordersfp DLQ_SUBJECT_PREFIX=ordersfp_dlq \
+  DURABLE_NAME=orders-worker go run ./examples/nats
 ```
+
+A work-queue stream allows only one consumer per filter subject, so `ROLE=puller`
+and the push worker cannot share a filter. Keep `DLQ_SUBJECT_PREFIX` outside
+`SUBJECT_PREFIX` for the same reason: overlapping subjects are rejected.
 
 ## Environment
 
@@ -129,6 +137,13 @@ ROLE=publisher CODEC=bytes go run ./examples/nats
 | `NATS_URL` | `nats://127.0.0.1:4222` | NATS connection URL(s) |
 | `ROLE` | `all` | `all` \| `publisher` \| `worker` \| `puller` |
 | `CODEC` | `json` | Publisher: `json` or `raw`/`bytes` (`PublishBytesWithMsgID`) |
+| `STREAM_NAME` | `ORDERS` | Work-queue stream to create/bind |
+| `DLQ_STREAM` | `<STREAM_NAME>_DLQ` | DLQ stream name |
+| `DURABLE_NAME` | `orders-processor` | Push (worker) durable |
+| `PULL_DURABLE_NAME` | `orders-puller` | Pull durable, created only for `ROLE=puller` |
+| `QUEUE_NAME` | `orders-workers` | Push worker queue group |
+| `SUBJECT_PREFIX` | `orders` | Publishes `<prefix>.created`, stream filter `<prefix>.>` |
+| `DLQ_SUBJECT_PREFIX` | `<SUBJECT_PREFIX>.dlq` | DLQ subjects `<prefix>.>`, poison `<prefix>.poison` |
 | `TEL_ENABLE` | (DefaultConfig) | `true` / `false` to force OTLP on/off |
 | `ENVIRONMENT` | `dev` | Telemetry environment attribute |
 | `SERVICE_VERSION` | `1.0.0` | Service version attribute |

@@ -7,6 +7,8 @@ import (
 	natspkg "github.com/nats-io/nats.go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/gopherust-io/nats/internal/bytesconv"
 )
 
 func TestPageSlice(t *testing.T) {
@@ -113,13 +115,13 @@ func TestKeyValueManagerAdminAPIs(t *testing.T) {
 	assert.Equal(t, bucket, status.Bucket)
 	t.Cleanup(func() { _ = client.KV().Delete(context.Background(), bucket) })
 
-	entry, err := client.KVKeys().Put(ctx, bucket, "k1", []byte("v1"))
+	entry, err := client.KVKeys().Put(ctx, bucket, "k1", bytesconv.StringToBytes("v1"))
 	require.NoError(t, err)
 	assert.Equal(t, "k1", entry.Key)
 
 	got, err := client.KVKeys().Get(ctx, bucket, "k1")
 	require.NoError(t, err)
-	assert.Equal(t, []byte("v1"), got.Value)
+	assert.Equal(t, bytesconv.StringToBytes("v1"), got.Value)
 
 	keys, total, err := client.KVKeys().ListKeys(ctx, bucket, 0, 10)
 	require.NoError(t, err)
@@ -157,14 +159,14 @@ func TestObjectStoreManagerCRUD(t *testing.T) {
 	assert.Equal(t, bucket, status.Bucket)
 	t.Cleanup(func() { _ = client.Objects().Delete(context.Background(), bucket) })
 
-	entry, err := client.Objects().Put(ctx, bucket, "file.txt", []byte("hello"))
+	entry, err := client.Objects().Put(ctx, bucket, "file.txt", bytesconv.StringToBytes("hello"))
 	require.NoError(t, err)
 	assert.Equal(t, "file.txt", entry.Name)
 	assert.Equal(t, uint64(5), entry.Size)
 
 	got, err := client.Objects().Get(ctx, bucket, "file.txt")
 	require.NoError(t, err)
-	assert.Equal(t, []byte("hello"), got.Data)
+	assert.Equal(t, bytesconv.StringToBytes("hello"), got.Data)
 
 	names, total, err := client.Objects().ListObjects(ctx, bucket, 0, 10)
 	require.NoError(t, err)
@@ -210,7 +212,7 @@ func TestPublishRaw(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = client.Streams().DeleteStream(context.Background(), stream) })
 
-	ack, err := client.PublishRaw(ctx, subject, []byte("payload"), map[string]string{"X-Test": "1"})
+	ack, err := client.PublishRaw(ctx, subject, bytesconv.StringToBytes("payload"), map[string]string{"X-Test": "1"})
 	require.NoError(t, err)
 	require.NotNil(t, ack)
 	assert.Equal(t, stream, ack.Stream)

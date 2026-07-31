@@ -6,6 +6,7 @@ import (
 	natspkg "github.com/nats-io/nats.go"
 
 	libnats "github.com/gopherust-io/nats"
+	"github.com/gopherust-io/nats/internal/bytesconv"
 )
 
 type DedupStore interface {
@@ -33,7 +34,7 @@ func MsgIDFromHeader(msg *natspkg.Msg) string {
 func WithHandler(store DedupStore, extractID func(*natspkg.Msg) string, handler libnats.MsgHandler) libnats.MsgHandler {
 	return func(ctx context.Context, msg *natspkg.Msg) error {
 		id := extractID(msg)
-		if id == "" {
+		if bytesconv.IsEmpty(id) {
 			return handler(ctx, msg)
 		}
 

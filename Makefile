@@ -18,7 +18,7 @@ GOLANGCI_LINT := go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v
 GOVULNCHECK := go run golang.org/x/vuln/cmd/govulncheck@v1.6.0
 BETTERALIGN := go run github.com/dkorunic/betteralign/cmd/betteralign@v0.7.2
 GOALIGN_VERSION := v1.1.0
-GOALIGN_BIN := $(CURDIR)/.cache/goalign-$(GOALIGN_VERSION)
+GOALIGN_BIN := $(HOME)/go/bin/goalign
 GOALIGN_FLAGS := analyze -r --arch=amd64 --fail-on-findings --min-waste=1 -e examples/,tools/ .
 
 help:

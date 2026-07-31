@@ -16,6 +16,8 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 
 	"github.com/gopherust-io/tel"
+
+	"github.com/gopherust-io/nats/internal/bytesconv"
 )
 
 const (
@@ -99,7 +101,7 @@ func streamSubjectPrefix(stream string) string {
 // Benchmarks and tests share one server; use uniqueStream for isolation.
 func startTestNATSServer(tb testing.TB) string {
 	tb.Helper()
-	if sharedNATSURL == "" {
+	if bytesconv.IsEmpty(sharedNATSURL) {
 		tb.Fatal("shared nats server not initialized")
 	}
 	return sharedNATSURL

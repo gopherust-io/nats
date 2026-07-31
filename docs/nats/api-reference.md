@@ -78,11 +78,16 @@ Optional connection hooks on `Config.Conn`: `OnDisconnect`, `OnReconnect`, `OnCl
 
 | Method | Description |
 |--------|-------------|
-| `ResetConsumer(ctx, stream, durable, opts...)` | Seek durable deliver position; preserves ack limits, filters, and other settings |
+| `ResetConsumer(ctx, stream, durable, opts...)` | Seek durable deliver position; returns `ReplayConsumerResult` with optional bounds |
 | `CreateReplayConsumer(ctx, stream, source, opts...)` | Side-car durable for backfill; live source durable is unchanged |
-| `GetMsg(ctx, stream, seq)` | Peek one stored message by sequence |
+| `GetMsg(ctx, stream, seq)` | Peek one stored message (`StoredMessage`: seq, subject, time, data) |
 | `GetLastMsgForSubject(ctx, stream, subject)` | Peek last message for a subject |
 | `GetNextMsgAfter(ctx, stream, seq)` | Peek next existing message after sequence (skips gaps) |
+| `GetMsgRange(ctx, stream, start, end, opts...)` | Fetch inclusive seq range; returns `(msgs, truncated, err)` |
+| `GetMsgRangeByTime(ctx, stream, start, end, opts...)` | Fetch inclusive time range via seq resolution |
+| `FindFirstSeqAtOrAfter` / `FindLastSeqAtOrBefore` | Map timestamps to stream sequences |
+
+JetStream consumers have no server-side end sequence. `UntilSeq` / `UntilTime` / `Limit` are validated, returned on the result, and stored in consumer metadata (`replay_until_seq`, `replay_limit`) so clients know where to stop. Range fetch hard-stops in the library (default max **1000**, override with `WithMaxMessages`).
 
 ### Replay options (`ReplayOpt`)
 
@@ -92,10 +97,13 @@ Optional connection hooks on `Config.Conn`: `OnDisconnect`, `OnReconnect`, `OnCl
 | `FromTime(t)` | DeliverByStartTime + OptStartTime |
 | `FromBeginning()` | DeliverAll |
 | `FromNew()` | DeliverNew |
+| `UntilSeq(end)` / `UntilTime(t)` / `Limit(n)` | Inclusive end bounds (metadata + result; not enforced by JetStream) |
+| `OneMessage(seq)` | `FromSeq(seq)` + `UntilSeq(seq)` + `Limit(1)` |
 | `WithReplayPolicy(p)` | Instant vs Original timing |
 | `WithFilterSubject(s)` / `WithFilterSubjects(...)` | Override filter(s) |
 | `WithReplayDurable(name)` | Side-car durable name for `CreateReplayConsumer` |
 | `WithDeliverPolicy` / `WithStartSeq` / `WithStartTime` | Lower-level setters |
+| `WithMaxMessages(n)` | Cap for `GetMsgRange*` (`MsgRangeOpt`) |
 
 ## Connection defaults (`DefaultConfig` / prod presets)
 
@@ -139,6 +147,8 @@ Optional: `TLS` (`ConnectionTLS`), `DontRandomize`, `CustomReconnectDelay`, auth
 | `SuperviseSubscribeBound` / `SuperviseQueueSubscribeBound` | Same as bound subscribe + auto-resubscribe when `IsValid()` is false |
 | `SupervisePullProcess` | Restarts `Pull.Process` with backoff after non-cancel errors |
 | `WatchSoftLiveness` | Polls `ConsumerInfo` for rising pending without process activity (`consumer_stall`) |
+| `WatchSlowConsumer` / `EvaluateSlowConsumer` | Sustained pending / lag / ack-pending ratio (`slow_consumer_detected`) |
+| `WatchBehaviorFingerprint` / `EvaluateBehaviorFingerprint` | Learned msg/min + handling latency; anomaly when rate stable and latency regresses (`behavior_fingerprint_anomaly`) |
 | `NewFlightRecorder` / `AttachSupervisor` / `AttachSoftLiveness` | Ring-buffer incident timeline; auto-dump on supervisor give-up |
 | `WithShadow(cfg, primary, shadow)` | Package-level dual-run (no auto metrics). Prefer `Client.WithShadow` |
 | `WithDLQ(cfg, handler)` | Publish poison msgs to a DLQ subject + `Term`; optional `Autopsy` forensics. Prefer [`nats/dlq`](../../nats/dlq) |
@@ -287,6 +297,16 @@ liveCfg := libnats.SoftLivenessConfig{StallAfter: 15 * time.Second, RisingWindow
 rec.AttachSoftLiveness(&liveCfg)
 live, _ := client.WatchSoftLiveness(ctx, sub, liveCfg)
 // Metrics: consumer_stall — snapshot: rec.WriteJSON(os.Stdout)
+```
+
+## Behavior fingerprinting
+
+```go
+fp, _ := client.WatchBehaviorFingerprint(ctx, sub, libnats.BehaviorFingerprintConfig{
+    LatencyFactor: 3, RateTolerance: 0.3, SustainFor: 30 * time.Second,
+    OnAnomaly: func(ev libnats.BehaviorAnomalyEvent) { /* Normal vs Current */ },
+})
+// Metrics: behavior_fingerprint_anomaly
 ```
 
 ## Dead-letter helper

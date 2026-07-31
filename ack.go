@@ -6,6 +6,8 @@ import (
 	"time"
 
 	natspkg "github.com/nats-io/nats.go"
+
+	"github.com/gopherust-io/nats/internal/bytesconv"
 )
 
 // Ack helpers wrap nats.go JetStream ack primitives for long-running and poison handlers.
@@ -45,7 +47,7 @@ func TermWithReason(msg *natspkg.Msg, reason string) error {
 		return errors.New("term with reason: nil message")
 	}
 
-	if reason == empty {
+	if bytesconv.IsEmpty(reason) {
 		if err := msg.Term(); err != nil {
 			return fmt.Errorf("term subject=%q: %w", msg.Subject, err)
 		}

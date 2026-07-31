@@ -7,6 +7,8 @@ import (
 	"sort"
 
 	natspkg "github.com/nats-io/nats.go"
+
+	"github.com/gopherust-io/nats/internal/bytesconv"
 )
 
 // StreamManager manages JetStream streams (≤10 methods for interfacebloat).
@@ -228,7 +230,7 @@ func (s *streamManager) PurgeStream(_ context.Context, name string, opts ...Purg
 		opt(req)
 	}
 
-	if req.Subject != empty {
+	if !bytesconv.IsEmpty(req.Subject) {
 		if err := ValidateSubject(req.Subject); err != nil {
 			return err
 		}

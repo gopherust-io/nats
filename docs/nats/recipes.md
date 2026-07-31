@@ -300,8 +300,18 @@ client.Consumers().CreateOrUpdateConsumer(ctx, "ORDERS", libnats.DurableConsumer
 **Replay from sequence (preserves consumer limits/filters):**
 
 ```go
-client.Replay().ResetConsumer(ctx, "ORDERS", "orders-audit",
+res, err := client.Replay().ResetConsumer(ctx, "ORDERS", "orders-audit",
     libnats.FromSeq(10000), libnats.WithReplayPolicy(libnats.ReplayInstant))
+```
+
+**One message / closed range (bounds in result + consumer metadata):**
+
+```go
+_, err = client.Replay().ResetConsumer(ctx, "ORDERS", "orders-audit",
+    libnats.OneMessage(10000))
+
+_, err = client.Replay().CreateReplayConsumer(ctx, "ORDERS", "orders-processor",
+    libnats.FromSeq(10000), libnats.UntilSeq(10100), libnats.Limit(101))
 ```
 
 **Side-car replay (live durable untouched):**
@@ -309,15 +319,17 @@ client.Replay().ResetConsumer(ctx, "ORDERS", "orders-audit",
 ```go
 temp, err := client.Replay().CreateReplayConsumer(ctx, "ORDERS", "orders-processor",
     libnats.FromSeq(10000))
-// subscribe / pull on `temp`, then DeleteConsumer when done
+// subscribe / pull on `temp.Durable`, then DeleteConsumer when done
 ```
 
-**Peek without moving cursors:**
+**Peek / export without moving cursors:**
 
 ```go
 msg, err := client.Replay().GetMsg(ctx, "ORDERS", 10000)
 last, err := client.Replay().GetLastMsgForSubject(ctx, "ORDERS", "orders.created")
 next, err := client.Replay().GetNextMsgAfter(ctx, "ORDERS", 10000)
+rangeMsgs, truncated, err := client.Replay().GetMsgRange(ctx, "ORDERS", 10000, 10100)
+byTime, truncated, err := client.Replay().GetMsgRangeByTime(ctx, "ORDERS", start, end)
 ```
 
 ---
@@ -413,6 +425,11 @@ liveCfg := libnats.SoftLivenessConfig{
 rec.AttachSoftLiveness(&liveCfg)
 live, _ := client.WatchSoftLiveness(ctx, sub, liveCfg)
 defer live.Stop()
+
+fp, _ := client.WatchBehaviorFingerprint(ctx, sub, libnats.BehaviorFingerprintConfig{
+    LatencyFactor: 3, RateTolerance: 0.3, SustainFor: 30 * time.Second,
+})
+defer fp.Stop()
 ```
 
 | Setting | Value | Why |
@@ -420,12 +437,14 @@ defer live.Stop()
 | Autopsy headers | `X-NATS-Autopsy-Error/Hash/Stack` | Forensics without a separate debug service |
 | Shadow | `shadow_error_total` / `shadow_mismatch_total` | Safe handler deploys; primary owns Ack/DLQ |
 | Soft liveness | `consumer_stall` | Queue path cannot use IdleHeartbeat |
+| Behavior fingerprint | `behavior_fingerprint_anomaly` | Same throughput, regressing handler latency |
 | Flight recorder | `Snapshot` / `WriteJSON` | Timeline of supervisor / stall / DLQ / shadow |
 
 **Ops notes**
 
 - Pair with stream `DuplicateWindow` + original `Nats-Msg-Id` so DLQ publish is idempotent on retries.
 - Queue workers: Supervisor polls `IsValid()`; SoftLiveness polls rising `NumPending` without process activity — see [Queue soft-liveness](push-vs-pull.md#queue-soft-liveness).
+- Fingerprinting learns msg/min + handling time — see [Consumer behavior fingerprinting](push-vs-pull.md#consumer-behavior-fingerprinting).
 - Shadow clones the message without `Reply`, so shadow Ack/Nak/Term cannot affect JetStream delivery.
 
 ---

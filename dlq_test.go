@@ -11,6 +11,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/gopherust-io/nats/internal/bytesconv"
 )
 
 type dlqTestPublisher struct {
@@ -67,7 +69,7 @@ func (p *dlqTestPublisher) PublishAsyncComplete(context.Context) error {
 func TestProcessMessageDLQRoutedSkipsAckNak(t *testing.T) {
 	t.Parallel()
 	c := &consumer{}
-	err := c.processMessage(context.Background(), &natspkg.Msg{Subject: "a", Data: []byte("x")},
+	err := c.processMessage(context.Background(), &natspkg.Msg{Subject: "a", Data: bytesconv.StringToBytes("x")},
 		func(_ context.Context, _ *natspkg.Msg) error {
 			return ErrDLQRouted
 		})
@@ -123,7 +125,7 @@ func TestDLQIntegrationRoutesAndTerms(t *testing.T) {
 	case msg := <-gotDLQ:
 		assert.Equal(t, prefix+"created", msg.Header.Get(HeaderDLQOriginalSubject))
 		assert.Equal(t, "handler_requested", msg.Header.Get(HeaderDLQReason))
-		assert.Contains(t, string(msg.Data), `"id"`)
+		assert.Contains(t, bytesconv.BytesToString(msg.Data), `"id"`)
 	case <-time.After(testWaitShort):
 		t.Fatal("timeout waiting for dlq message")
 	}

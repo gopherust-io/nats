@@ -2,6 +2,7 @@ package nats
 
 import (
 	"errors"
+	"time"
 )
 
 type Message struct {
@@ -10,6 +11,26 @@ type Message struct {
 	// Expect applies optimistic concurrency PubOpts (ExpectedStream / LastSeq / LastMsgId).
 	Expect      *PublishExpectation
 	MessageType MessageType
+}
+
+// StoredMessage is a JetStream stream message loaded by sequence (peek / range export).
+type StoredMessage struct {
+	Time        time.Time
+	Header      map[string][]string
+	Subject     string
+	Data        []byte
+	Sequence    uint64
+	MessageType MessageType
+}
+
+// ReplayConsumerResult is returned after ResetConsumer / CreateReplayConsumer.
+type ReplayConsumerResult struct {
+	StartTime *time.Time
+	UntilTime *time.Time
+	Durable   string
+	StartSeq  uint64
+	UntilSeq  uint64
+	Limit     int
 }
 
 // PublishExpectation is optimistic concurrency for JetStream publish.
@@ -95,4 +116,14 @@ var (
 	ErrConflictingAuth              = errors.New("conflicting auth: set only one of Seed, User/Password, Secret, or CredentialsFile")
 	ErrSupervisorGiveUp             = errors.New("subscription supervisor gave up after max retries")
 	ErrConsumerStall                = errors.New("consumer soft-liveness stall: pending rising without process activity")
+	ErrInvalidReplayBound           = errors.New("invalid replay bound")
 )
+
+// Consumer metadata keys for intended replay bounds (JetStream has no server-side end).
+const (
+	MetaReplayUntilSeq = "replay_until_seq"
+	MetaReplayLimit    = "replay_limit"
+)
+
+// DefaultMsgRangeMax is the default cap for GetMsgRange / GetMsgRangeByTime.
+const DefaultMsgRangeMax = 1000
