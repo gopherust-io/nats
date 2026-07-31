@@ -62,8 +62,7 @@ func (s *behaviorInfoSub) ConsumerInfo() (*natspkg.ConsumerInfo, error) {
 }
 
 func TestWatchBehaviorFingerprintDetectsAnomaly(t *testing.T) {
-	t.Parallel()
-
+	// Timing-sensitive: keep serial so CI load does not stretch sleeps unevenly.
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
@@ -71,15 +70,24 @@ func TestWatchBehaviorFingerprintDetectsAnomaly(t *testing.T) {
 	sub.valid.Store(true)
 	sub.info.Store(&natspkg.ConsumerInfo{Stream: "ORDERS", Name: "billing-worker"})
 
+	const (
+		poll     = 20 * time.Millisecond
+		window   = 100 * time.Millisecond
+		warmup   = time.Second // >> window so EWMA baseline can catch full-window rate
+		sustain  = 50 * time.Millisecond
+		interval = 3 * time.Millisecond
+	)
+
 	got := make(chan BehaviorAnomalyEvent, 1)
+	started := time.Now()
 	bf, err := WatchBehaviorFingerprint(ctx, sub, BehaviorFingerprintConfig{
-		PollInterval:  15 * time.Millisecond,
-		Window:        150 * time.Millisecond,
-		Warmup:        180 * time.Millisecond,
+		PollInterval:  poll,
+		Window:        window,
+		Warmup:        warmup,
 		MinSamples:    8,
 		LatencyFactor: 3,
 		RateTolerance: 0.5,
-		SustainFor:    40 * time.Millisecond,
+		SustainFor:    sustain,
 		CircuitStop:   true,
 		OnAnomaly: func(ev BehaviorAnomalyEvent) {
 			select {
@@ -91,36 +99,41 @@ func TestWatchBehaviorFingerprintDetectsAnomaly(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(bf.Stop)
 
-	// Learn normal: ~200ms handling at a steady observe rate (fill full window).
-	deadline := time.Now().Add(280 * time.Millisecond)
-	for time.Now().Before(deadline) {
+	// Learn only while still in warmup — do not inject slow samples yet or the
+	// baseline EWMA absorbs the regression.
+	learnUntil := started.Add(warmup + 50*time.Millisecond)
+	for time.Now().Before(learnUntil) {
 		bf.Observe(200 * time.Millisecond)
-		time.Sleep(2 * time.Millisecond)
+		time.Sleep(interval)
 	}
 
-	// Wait until baseline is ready and learning window has elapsed.
 	require.Eventually(t, func() bool {
-		_, _, ready := bf.Snapshot()
-		return ready && !bf.Anomalous()
-	}, time.Second, 10*time.Millisecond)
+		normal, current, ready := bf.Snapshot()
+		if !ready || bf.Anomalous() || normal.Processing <= 0 || current.MsgPerMin <= 0 {
+			return false
+		}
+		// Baseline rate must be near current full-window rate before we slow down.
+		return nearBehaviorBaseline(current, normal, BehaviorFingerprintConfig{RateTolerance: 0.5})
+	}, 2*time.Second, poll)
 
-	// Same throughput, much slower processing.
-	slowUntil := time.Now().Add(200 * time.Millisecond)
-	for time.Now().Before(slowUntil) {
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
 		bf.Observe(2400 * time.Millisecond)
-		time.Sleep(2 * time.Millisecond)
+		select {
+		case ev := <-got:
+			assert.Equal(t, "ORDERS", ev.Stream)
+			assert.Equal(t, "billing-worker", ev.Durable)
+			assert.InDelta(t, ev.Normal.MsgPerMin, ev.Current.MsgPerMin, ev.Normal.MsgPerMin*0.5+1)
+			assert.GreaterOrEqual(t, ev.Current.Processing, 3*ev.Normal.Processing)
+			assert.True(t, bf.Anomalous())
+			return
+		default:
+			time.Sleep(interval)
+		}
 	}
-
-	select {
-	case ev := <-got:
-		assert.Equal(t, "ORDERS", ev.Stream)
-		assert.Equal(t, "billing-worker", ev.Durable)
-		assert.InDelta(t, ev.Normal.MsgPerMin, ev.Current.MsgPerMin, ev.Normal.MsgPerMin*0.5+1)
-		assert.GreaterOrEqual(t, ev.Current.Processing, 3*ev.Normal.Processing)
-		assert.True(t, bf.Anomalous())
-	case <-time.After(2 * time.Second):
-		t.Fatal("expected behavior fingerprint anomaly")
-	}
+	normal, current, ready := bf.Snapshot()
+	t.Fatalf("expected behavior fingerprint anomaly; ready=%v anomalous=%v normal=%+v current=%+v",
+		ready, bf.Anomalous(), normal, current)
 }
 
 func TestWatchBehaviorFingerprintNoAnomalyOnRateCollapse(t *testing.T) {
