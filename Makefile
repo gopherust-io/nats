@@ -6,32 +6,23 @@ FUZZ_TESTS := FuzzDecodeJSON FuzzCommonWildcardSubject FuzzShardIndex
 NPROCS := $(shell getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 GO_TEST_FLAGS := -count=1 -parallel=$(NPROCS) -timeout=60s
 COVERAGE_MIN ?= 75
-NATS_COMPOSE := docker/nats/single/docker-compose.yml
-NATS_CLUSTER_COMPOSE := docker/nats/cluster/docker-compose.yml
-NATS_AUTH_COMPOSE := docker/nats/auth/docker-compose.yml
-NATS_HEALTHZ := http://127.0.0.1:8222/healthz
 
 .PHONY: help test test-race coverage coverage-html bench bench-codec fuzz ci vet fmt fmt-check lint lint-fix govulncheck align align-fix examples \
-	nats-up nats-down nats-cluster-up nats-auth-up nats-down-all loadtest demo demo-nats dev
+	loadtest demo demo-nats dev
 
 GOLANGCI_LINT := go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2
 GOVULNCHECK := go run golang.org/x/vuln/cmd/govulncheck@v1.6.0
 BETTERALIGN := go run github.com/dkorunic/betteralign/cmd/betteralign@v0.7.2
-GOALIGN_VERSION := v1.1.0
+GOALIGN_VERSION := v1.3.0
 GOALIGN_BIN := $(HOME)/go/bin/goalign
 GOALIGN_FLAGS := analyze -r --arch=amd64 --fail-on-findings --min-waste=1 -e examples/,tools/ .
 
 help:
 	@echo "Targets:"
-	@echo "  nats-up           Start single-node JetStream (Docker) and wait for healthz"
-	@echo "  nats-cluster-up   Start 3-node cluster lab"
-	@echo "  nats-auth-up      Start auth/subject-permissions lab"
-	@echo "  nats-down         Stop single-node stack"
-	@echo "  nats-down-all     Stop single, cluster, auth, and supercluster stacks"
 	@echo "  loadtest          Run tools/loadtest against local NATS"
-	@echo "  demo-nats         Run examples/nats (requires nats-up)"
+	@echo "  demo-nats         Run examples/nats (requires local JetStream)"
 	@echo "  demo              Alias for demo-nats"
-	@echo "  dev               nats-up then print next steps"
+	@echo "  dev               Print local broker + next steps"
 	@echo "  test              Run all unit tests (max parallel)"
 	@echo "  test-race         Run tests with -race"
 	@echo "  coverage          Write coverage.out, print summary, enforce COVERAGE_MIN ($(COVERAGE_MIN)%)"
@@ -49,38 +40,8 @@ help:
 	@echo "  align-fix        Reorder struct fields via betteralign -apply (local; then make align)"
 	@echo "  vet               go vet on all packages"
 	@echo "  examples          Build example programs"
-
-nats-up:
-	docker compose -f $(NATS_COMPOSE) up -d
-	@echo "Waiting for JetStream healthz..."
-	@i=0; \
-	while [ $$i -lt 30 ]; do \
-		if curl -sf $(NATS_HEALTHZ) >/dev/null 2>&1; then \
-			echo "NATS ready: nats://127.0.0.1:4222  monitor $(NATS_HEALTHZ)"; \
-			exit 0; \
-		fi; \
-		i=$$((i+1)); \
-		sleep 1; \
-	done; \
-	echo "Timed out waiting for $(NATS_HEALTHZ)"; \
-	exit 1
-
-nats-cluster-up:
-	docker compose -f $(NATS_CLUSTER_COMPOSE) up -d
-	@echo "Cluster lab up (ports 4222-4224). See docs/nats/local-docker.md"
-
-nats-auth-up:
-	docker compose -f $(NATS_AUTH_COMPOSE) up -d
-	@echo "Auth lab up. Users: orders-pub/pubpass, orders-worker/workerpass, js-admin/adminpass"
-
-nats-down:
-	docker compose -f $(NATS_COMPOSE) down
-
-nats-down-all:
-	-docker compose -f $(NATS_COMPOSE) down -v
-	-docker compose -f $(NATS_CLUSTER_COMPOSE) down -v
-	-docker compose -f $(NATS_AUTH_COMPOSE) down -v
-	-docker compose -f docker/nats/supercluster/docker-compose.yml down -v
+	@echo ""
+	@echo "Docker JetStream labs live in nats-console: make nats-up / nats-cluster-up there."
 
 loadtest:
 	go run ./tools/loadtest -url nats://127.0.0.1:4222
@@ -90,13 +51,16 @@ demo-nats:
 
 demo: demo-nats
 
-dev: nats-up
+dev:
+	@echo "Start a local JetStream broker, then run demos/tests."
+	@echo "  Labs: https://github.com/gopherust-io/nats-console/tree/main/docker/nats"
+	@echo "  In nats-console: make nats-up"
+	@echo "  Or: nats-server -js"
 	@echo ""
 	@echo "Next:"
 	@echo "  make demo-nats    # JetStream publish/consume demo"
 	@echo "  make loadtest     # publish/consume load harness"
 	@echo "  make test         # unit tests"
-	@echo "  make nats-down    # stop JetStream"
 
 test:
 	go test $(GO_TEST_FLAGS) $(PKGS)
@@ -150,11 +114,7 @@ align: $(GOALIGN_BIN)
 	$(GOALIGN_BIN) $(GOALIGN_FLAGS)
 
 $(GOALIGN_BIN):
-	@mkdir -p $(dir $@)
-	@tmpdir=$$(mktemp -d) && \
-		curl -fsSL https://github.com/gopherust-io/goalign/archive/refs/tags/$(GOALIGN_VERSION).tar.gz | tar -xz -C $$tmpdir && \
-		(cd $$tmpdir/goalign-$(patsubst v%,%,$(GOALIGN_VERSION)) && go build -o $(GOALIGN_BIN) .) && \
-		rm -rf $$tmpdir
+	go install github.com/gopherust-io/goalign@$(GOALIGN_VERSION)
 
 align-fix:
 	$(BETTERALIGN) -apply ./...

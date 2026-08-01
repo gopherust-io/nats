@@ -398,6 +398,33 @@ func (r *replay) GetMsgRange(
 	out := make([]*StoredMessage, 0)
 	truncated := false
 
+	// One StreamInfo for the range walk so we do not re-fetch LastSeq per gap skip.
+	info, err := r.streams.StreamInfo(ctx, stream)
+	if err != nil {
+		return nil, false, fmt.Errorf("replay get msg range stream=%q: %w", stream, err)
+	}
+	last := info.State.LastSeq
+	if endSeq > last {
+		endSeq = last
+	}
+	if startSeq > last {
+		return out, false, nil
+	}
+
+	nextExisting := func(after uint64) (*natspkg.RawStreamMsg, error) {
+		for seq := after + 1; seq <= endSeq; seq++ {
+			msg, getErr := r.streams.GetMsg(ctx, stream, seq)
+			if getErr == nil {
+				return msg, nil
+			}
+			if !errors.Is(getErr, natspkg.ErrMsgNotFound) {
+				return nil, getErr
+			}
+		}
+
+		return nil, natspkg.ErrMsgNotFound
+	}
+
 	var cur uint64
 	raw, err := r.streams.GetMsg(ctx, stream, startSeq)
 	switch {
@@ -405,16 +432,13 @@ func (r *replay) GetMsgRange(
 		out = append(out, storedMessageFromRaw(raw))
 		cur = startSeq
 	case errors.Is(err, natspkg.ErrMsgNotFound):
-		next, nextErr := r.streams.GetNextMsgAfter(ctx, stream, startSeq-1)
+		next, nextErr := nextExisting(startSeq - 1)
 		if nextErr != nil {
 			if errors.Is(nextErr, natspkg.ErrMsgNotFound) {
 				return out, false, nil
 			}
 
 			return nil, false, fmt.Errorf("replay get msg range stream=%q start=%d: %w", stream, startSeq, nextErr)
-		}
-		if next.Sequence > endSeq {
-			return out, false, nil
 		}
 		out = append(out, storedMessageFromRaw(next))
 		cur = next.Sequence
@@ -425,10 +449,10 @@ func (r *replay) GetMsgRange(
 	for {
 		if len(out) >= cfg.max {
 			if cur < endSeq {
-				next, nextErr := r.streams.GetNextMsgAfter(ctx, stream, cur)
-				if nextErr == nil && next.Sequence <= endSeq {
+				_, nextErr := nextExisting(cur)
+				if nextErr == nil {
 					truncated = true
-				} else if nextErr != nil && !errors.Is(nextErr, natspkg.ErrMsgNotFound) {
+				} else if !errors.Is(nextErr, natspkg.ErrMsgNotFound) {
 					return nil, false, nextErr
 				}
 			}
@@ -438,16 +462,13 @@ func (r *replay) GetMsgRange(
 		if cur >= endSeq {
 			break
 		}
-		next, nextErr := r.streams.GetNextMsgAfter(ctx, stream, cur)
+		next, nextErr := nextExisting(cur)
 		if nextErr != nil {
 			if errors.Is(nextErr, natspkg.ErrMsgNotFound) {
 				break
 			}
 
 			return nil, false, fmt.Errorf("replay get msg range stream=%q after=%d: %w", stream, cur, nextErr)
-		}
-		if next.Sequence > endSeq {
-			break
 		}
 		out = append(out, storedMessageFromRaw(next))
 		cur = next.Sequence
@@ -599,6 +620,9 @@ func (r *replay) getExistingAtOrNear(
 		return nil, nextErr
 	}
 
+	// Bound the linear gap walk so sparse deleted ranges cannot issue O(gap) RPCs.
+	const maxPrevWalk = 128
+	steps := 0
 	for prev := seq; prev >= first; prev-- {
 		m, getErr := r.streams.GetMsg(ctx, stream, prev)
 		if getErr == nil {
@@ -607,7 +631,8 @@ func (r *replay) getExistingAtOrNear(
 		if !errors.Is(getErr, natspkg.ErrMsgNotFound) {
 			return nil, getErr
 		}
-		if prev == 0 {
+		steps++
+		if steps >= maxPrevWalk || prev == 0 {
 			break
 		}
 	}

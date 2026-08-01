@@ -10,7 +10,7 @@ Module: [`github.com/gopherust-io/nats`](https://github.com/gopherust-io/nats)
 
 Latest stable release: see [GitHub Releases](https://github.com/gopherust-io/nats/releases).
 
-Quick links: [Getting started](docs/getting-started.md) · [API reference](docs/nats/api-reference.md) · [Compatibility](docs/compatibility.md)
+Quick links: [Architecture](ARCHITECTURE.md) · [Getting started](docs/getting-started.md) · [API reference](docs/nats/api-reference.md) · [Compatibility](docs/compatibility.md)
 
 ---
 
@@ -18,7 +18,7 @@ Quick links: [Getting started](docs/getting-started.md) · [API reference](docs/
 
 ```bash
 go get github.com/gopherust-io/nats@latest
-make nats-up   # local broker
+# local broker: nats-server -js  — or labs in nats-console (make nats-up)
 ```
 
 ```bash
@@ -154,7 +154,7 @@ Presets never invent stream topology.
 ## Development
 
 ```bash
-make nats-up
+# Start JetStream (nats-console: make nats-up — or nats-server -js)
 make demo-nats    # ROLE=all|publisher|worker|puller
 make test
 ```
@@ -168,7 +168,7 @@ make test
 | [Recipes](docs/nats/recipes.md) | Production configs |
 | [Push vs pull](docs/nats/push-vs-pull.md) | Delivery model |
 | [Performance](docs/performance.md) | Codecs, AttrCache, throughput |
-| [Local Docker](docs/nats/local-docker.md) | Single / cluster / supercluster |
+| [Local Docker](docs/nats/local-docker.md) | Compose labs (in nats-console) |
 | [API reference](docs/nats/api-reference.md) | Binding, middleware, presets |
 
 [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md)

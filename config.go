@@ -361,7 +361,7 @@ func DefaultConfig() Config {
 			MetricPrefix:     defaultMetricPrefix,
 		},
 		Backpressure: BackpressureConfig{
-			Mode:                     BackpressureBlock,
+			Mode:                     BackpressureNak,
 			MaxAckPending:            defaultMaxAckPending,
 			QueueDepthSampleInterval: defaultQueueDepthSampleInterval,
 		},

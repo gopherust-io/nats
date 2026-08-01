@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.4.0
+
+- Depend on [tel](https://github.com/gopherust-io/tel) **v0.3.0** (pulls [env](https://github.com/gopherust-io/env) **v0.5.0**).
+- goalign **v1.3.0** via `go install` (Makefile).
+- Panic-safe message handlers (`invokeMsgHandler`) for push/pull paths.
+- `ARCHITECTURE.md`; JetStream Compose labs moved to [nats-console](https://github.com/gopherust-io/nats-console) (`docker/nats` removed from this repo).
+- Worker pool, shadow, replay, and consumer hardening; docs updated for nats-console labs.
+
 ## v0.3.0
 
 - Replay peek returns `StoredMessage` (sequence, subject, time, data).

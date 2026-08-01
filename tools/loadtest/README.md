@@ -5,7 +5,8 @@ Publishes and consumes against a local JetStream server for CPU/memory compariso
 ## Prerequisites
 
 ```bash
-docker compose -f docker/nats/single/docker-compose.yml up -d
+# nats-console: make nats-up
+# or: nats-server -js
 ```
 
 ## Run

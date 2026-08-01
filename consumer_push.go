@@ -379,7 +379,7 @@ func (c *consumer) processMessage(ctx context.Context, msg *natspkg.Msg, handler
 		start = time.Now().UnixNano()
 	}
 
-	err := handler(spanCtx, msg)
+	err := invokeMsgHandler(spanCtx, msg, handler)
 	handlerErr = err
 
 	elapsed := time.Duration(time.Now().UnixNano() - start)
@@ -488,12 +488,19 @@ func (c *consumer) stop() {
 }
 
 type subscription struct {
-	sub *natspkg.Subscription
+	sub         *natspkg.Subscription
+	drainCancel context.CancelFunc
 }
 
 func (s *subscription) Unsubscribe() error {
 	if s.sub == nil {
 		return ErrInvalidSubscription
+	}
+	// Unblock the per-sub drain goroutine so supervisor resubscribe does not
+	// accumulate goroutines parked on the parent context.
+	if s.drainCancel != nil {
+		s.drainCancel()
+		s.drainCancel = nil
 	}
 
 	return s.sub.Unsubscribe()
@@ -514,6 +521,10 @@ func (s *subscription) Subject() string {
 func (s *subscription) Drain() error {
 	if s.sub == nil {
 		return ErrInvalidSubscription
+	}
+	if s.drainCancel != nil {
+		s.drainCancel()
+		s.drainCancel = nil
 	}
 
 	return s.sub.Drain()
@@ -543,11 +554,26 @@ func (s *subscription) Type() natspkg.SubscriptionType {
 	return s.sub.Type()
 }
 
+// drainOnCancel drains the subscription when ctx is cancelled, using a child
+// context that Unsubscribe cancels so resubscribe does not leak goroutines.
 func drainOnCancel(ctx context.Context, sub Subscription) {
-	go func() {
-		<-ctx.Done()
+	typed, ok := sub.(*subscription)
+	if !ok {
+		go func() {
+			<-ctx.Done()
+			_ = sub.Drain()
+		}()
 
-		_ = sub.Drain()
+		return
+	}
+
+	drainCtx, cancel := context.WithCancel(ctx)
+	typed.drainCancel = cancel
+	go func() {
+		<-drainCtx.Done()
+		if typed.sub != nil && typed.sub.IsValid() {
+			_ = typed.sub.Drain()
+		}
 	}()
 }
 

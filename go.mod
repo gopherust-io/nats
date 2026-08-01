@@ -4,7 +4,7 @@ go 1.26.5
 
 require (
 	github.com/bytedance/sonic v1.15.2
-	github.com/gopherust-io/tel v0.2.0
+	github.com/gopherust-io/tel v0.3.0
 	github.com/nats-io/nats-server/v2 v2.14.4
 	github.com/nats-io/nats.go v1.52.0
 	github.com/nats-io/nkeys v0.4.16
@@ -30,6 +30,7 @@ require (
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/google/go-tpm v0.9.8 // indirect
 	github.com/google/uuid v1.6.0 // indirect
+	github.com/gopherust-io/env v0.5.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.29.0 // indirect
 	github.com/klauspost/compress v1.19.1 // indirect
 	github.com/klauspost/cpuid/v2 v2.4.0 // indirect
@@ -50,6 +51,7 @@ require (
 	golang.org/x/arch v0.29.0 // indirect
 	golang.org/x/crypto v0.54.0 // indirect
 	golang.org/x/net v0.57.0 // indirect
+	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/text v0.40.0 // indirect
 	golang.org/x/time v0.15.0 // indirect

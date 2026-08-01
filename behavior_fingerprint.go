@@ -131,6 +131,8 @@ type BehaviorFingerprint struct {
 	events          chan BehaviorAnomalyEvent
 	stopCh          chan struct{}
 	metrics         *clientMetrics
+	stream          string
+	durable         string
 	samples         []behaviorSample
 	cfg             BehaviorFingerprintConfig
 	lastCurrent     BehaviorSnapshot
@@ -157,6 +159,10 @@ func WatchBehaviorFingerprint(
 	}
 
 	cfg = cfg.withDefaults()
+	stream, durable := "", ""
+	if info, err := sub.ConsumerInfo(); err == nil && info != nil {
+		stream, durable = info.Stream, info.Name
+	}
 	bf := &BehaviorFingerprint{
 		sub:       sub,
 		cfg:       cfg,
@@ -164,6 +170,8 @@ func WatchBehaviorFingerprint(
 		events:    make(chan BehaviorAnomalyEvent, behaviorEventBuffer),
 		stopCh:    make(chan struct{}),
 		startedAt: time.Now(),
+		stream:    stream,
+		durable:   durable,
 	}
 	go bf.loop(ctx)
 
@@ -260,13 +268,12 @@ func (b *BehaviorFingerprint) tick(ctx context.Context) {
 		}
 		b.haveBreach = false
 		b.breachStart = time.Time{}
-		stream, durable := "", ""
 		shouldReport := b.shouldReportLocked(now)
 		if shouldReport {
 			b.lastReportAt = now
-			stream, durable = b.identityLocked()
 		}
 		reportNormal, reportCurrent := normal, current
+		stream, durable := b.stream, b.durable
 		b.mu.Unlock()
 		if shouldReport {
 			b.reportKV(ctx, false, stream, durable, reportNormal, reportCurrent, 0)
@@ -291,10 +298,9 @@ func (b *BehaviorFingerprint) tick(ctx context.Context) {
 		return
 	}
 
-	stream, durable := b.identityLocked()
 	ev := BehaviorAnomalyEvent{
-		Stream:       stream,
-		Durable:      durable,
+		Stream:       b.stream,
+		Durable:      b.durable,
 		Normal:       normal,
 		Current:      current,
 		SustainedFor: sustained,
@@ -389,7 +395,8 @@ func (b *BehaviorFingerprint) trimLocked(now time.Time) {
 		i++
 	}
 	if i > 0 {
-		b.samples = append([]behaviorSample(nil), b.samples[i:]...)
+		n := copy(b.samples, b.samples[i:])
+		b.samples = b.samples[:n]
 	}
 }
 
@@ -417,18 +424,6 @@ func (b *BehaviorFingerprint) windowStatsLocked(now time.Time) BehaviorSnapshot 
 		MsgPerMin:  msgPerMin,
 		Processing: mean,
 	}
-}
-
-func (b *BehaviorFingerprint) identityLocked() (string, string) {
-	if b.sub == nil {
-		return "", ""
-	}
-	info, err := b.sub.ConsumerInfo()
-	if err != nil || info == nil {
-		return "", ""
-	}
-
-	return info.Stream, info.Name
 }
 
 func (b *BehaviorFingerprint) emit(ev BehaviorAnomalyEvent) {

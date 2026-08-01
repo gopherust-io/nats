@@ -46,9 +46,9 @@ Core NATS pub/sub is fire-and-forget. This library is **JetStream-first**: persi
 | [Naming conventions](naming-conventions.md) | Stream / durable / queue naming |
 | [API reference](api-reference.md) | Helpers, presets, supervisor, DLQ; leaf packages `dlq` / `shadow` / `shard` |
 | [Performance](../performance.md) | ThroughputConfig, codecs, alloc tips |
-| [Local Docker](local-docker.md) | Single / cluster / supercluster Compose |
+| [Local Docker](local-docker.md) | Compose labs (nats-console `docker/nats`) |
 
-Runnable demo: [`examples/nats/`](../../examples/nats/) · Compose: [`docker/nats/`](../../docker/nats/)
+Runnable demo: [`examples/nats/`](../../examples/nats/) · Compose labs: [nats-console `docker/nats`](https://github.com/gopherust-io/nats-console/tree/main/docker/nats)
 
 ---
 

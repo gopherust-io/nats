@@ -52,6 +52,8 @@ func (c Config) withDefaults() Config {
 
 // With runs primary for delivery fate and optionally a shadow handler on a
 // cloned message (no Reply) so Ack/Nak/Term from shadow cannot affect JetStream.
+// Shadow work is sampled, cloned only when sampled, and run asynchronously so
+// the primary hot path is not blocked by shadow handler latency.
 func With(cfg Config, primary, shadow Handler) Handler {
 	if primary == nil {
 		return primary
@@ -76,27 +78,42 @@ func With(cfg Config, primary, shadow Handler) Handler {
 			return primaryErr
 		}
 
-		shadowErr := run(ctx, shadow, cloneMsg(msg))
-		if shadowErr != nil {
-			if cfg.Metrics != nil {
-				cfg.Metrics.ShadowError(ctx)
-			}
-			if cfg.Recorder != nil {
-				cfg.Recorder.RecordShadow("shadow_error", msg.Subject, shadowErr.Error())
-			}
-		}
-
-		if !compare(primaryErr, shadowErr) {
-			if cfg.Metrics != nil {
-				cfg.Metrics.ShadowMismatch(ctx)
-			}
-			if cfg.Recorder != nil {
-				cfg.Recorder.RecordShadow("shadow_mismatch", msg.Subject,
-					fmt.Sprintf("primary=%v shadow=%v", primaryErr, shadowErr))
-			}
-		}
+		cloned := cloneMsg(msg)
+		subject := msg.Subject
+		shadowCtx := context.WithoutCancel(ctx)
+		go observeShadow(shadowCtx, cfg, shadow, cloned, subject, primaryErr, compare)
 
 		return primaryErr
+	}
+}
+
+func observeShadow(
+	ctx context.Context,
+	cfg Config,
+	shadow Handler,
+	msg *natspkg.Msg,
+	subject string,
+	primaryErr error,
+	compare func(primaryErr, shadowErr error) bool,
+) {
+	shadowErr := run(ctx, shadow, msg)
+	if shadowErr != nil {
+		if cfg.Metrics != nil {
+			cfg.Metrics.ShadowError(ctx)
+		}
+		if cfg.Recorder != nil {
+			cfg.Recorder.RecordShadow("shadow_error", subject, shadowErr.Error())
+		}
+	}
+
+	if !compare(primaryErr, shadowErr) {
+		if cfg.Metrics != nil {
+			cfg.Metrics.ShadowMismatch(ctx)
+		}
+		if cfg.Recorder != nil {
+			cfg.Recorder.RecordShadow("shadow_mismatch", subject,
+				fmt.Sprintf("primary=%v shadow=%v", primaryErr, shadowErr))
+		}
 	}
 }
 

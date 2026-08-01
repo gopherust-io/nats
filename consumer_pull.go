@@ -17,6 +17,7 @@ type PullConsumer interface {
 	Fetch(ctx context.Context, batch int, opts ...FetchOpt) ([]*natspkg.Msg, error)
 	FetchNoWait(batch int) ([]*natspkg.Msg, error)
 	Process(ctx context.Context, handler MsgHandler, opts ...ProcessOpt) error
+	Close() error
 }
 
 type (
@@ -103,6 +104,16 @@ func (c *consumer) Pull(stream, durable string) (PullConsumer, error) {
 	}
 
 	return &pullConsumer{js: c.js, sub: sub, metrics: c.metrics, parent: c}, nil
+}
+
+// Close unsubscribes the underlying pull subscription.
+func (p *pullConsumer) Close() error {
+	if p == nil || p.sub == nil {
+		return nil
+	}
+	err := p.sub.Unsubscribe()
+	p.sub = nil
+	return err
 }
 
 func (p *pullConsumer) Fetch(ctx context.Context, batch int, opts ...FetchOpt) ([]*natspkg.Msg, error) {

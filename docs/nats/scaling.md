@@ -83,7 +83,7 @@ Separate durables on `LimitsPolicy` — each service gets every message. Do not 
 - `Replicas: 3` for production durability
 - `FileStorage` for persistence
 - Tune `MaxBytes`, `MaxAge` for retention bounds
-- Superclusters / leaf nodes for geo scale — production patterns: [Production operations — Server](devops.md#part-b--nats-server); local gateway lab: [Local Docker](local-docker.md#mini-supercluster-2--2)
+- Superclusters / leaf nodes for geo scale — production patterns: [Production operations — Server](devops.md#part-b--nats-server); local gateway lab: [nats-console local Docker — mini supercluster](https://github.com/gopherust-io/nats-console/blob/main/docs/local-docker.md#mini-supercluster-2--2)
 - Basic mirror/source streams: set `StreamConfig.Mirror` / `Sources` on `CreateOrUpdateStream` (see [API / StreamConfig](api-reference.md)); leaf-node and multi-account export/import remain upstream NATS ops
 
 ## Decision guide

@@ -208,15 +208,22 @@ func (m *objectStoreManager) Get(_ context.Context, bucket, name string) (*Objec
 		return nil, fmt.Errorf("get object info bucket=%q name=%q: %w", bucket, name, err)
 	}
 
+	const maxObjectGetBytes = 64 << 20 // 64 MiB
+	if info.Size > maxObjectGetBytes {
+		return nil, fmt.Errorf("get object bucket=%q name=%q: size %d exceeds %d byte limit", bucket, name, info.Size, maxObjectGetBytes)
+	}
+
 	result, err := os.Get(name)
 	if err != nil {
 		return nil, fmt.Errorf("get object bucket=%q name=%q: %w", bucket, name, err)
 	}
 	defer func() { _ = result.Close() }()
 
-	data, err := io.ReadAll(result)
-	if err != nil {
-		return nil, fmt.Errorf("get object read bucket=%q name=%q: %w", bucket, name, err)
+	data := make([]byte, info.Size)
+	if info.Size > 0 {
+		if _, err := io.ReadFull(result, data); err != nil {
+			return nil, fmt.Errorf("get object read bucket=%q name=%q: %w", bucket, name, err)
+		}
 	}
 
 	return &ObjectEntry{

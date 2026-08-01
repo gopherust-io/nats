@@ -2,7 +2,7 @@
 //
 // Example:
 //
-//	docker compose -f docker/nats/single/docker-compose.yml up -d
+//	# nats-console: make nats-up  (or nats-server -js)
 //	go run ./tools/loadtest -nats nats://127.0.0.1:4222 -duration 30s -codec bytes -workers 8
 package main
 

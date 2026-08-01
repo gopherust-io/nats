@@ -93,8 +93,9 @@ NATS with JetStream:
 # Option A: local binary
 nats-server -js
 
-# Option B: Compose (repo)
-docker compose -f docker/nats/single/docker-compose.yml up -d
+# Option B: Compose (nats-console repo)
+#   make nats-up
+#   or: docker compose -f docker/nats/single/docker-compose.yml up -d
 curl -s http://127.0.0.1:8222/healthz
 ```
 
@@ -172,7 +173,7 @@ and the push worker cannot share a filter. Keep `DLQ_SUBJECT_PREFIX` outside
 | Proto / MsgPack | No (`CODEC=bytes` or JSON) | README codecs |
 | Fan-out preset | No | Recipe B |
 | `SupervisePullProcess` | No (puller is metrics-only) | api-reference / devops |
-| TLS / AuthZ roles | No | `docker/nats/auth`, devops §4 |
+| TLS / AuthZ roles | No | nats-console `docker/nats/auth`, devops §4 |
 | `Expected*` publish / ack helpers | No | api-reference |
 
 ## What you should see
