@@ -34,7 +34,6 @@ type task struct {
 // WorkerPool is a fixed-size goroutine pool over a buffered channel.
 // Publish is lock-free on the accept path: state CAS gates enqueue, and
 // GracefulStop drains without closing the channel (avoids send-on-closed races).
-// WorkerPool is a configured value type.
 //
 // goalign:ignore
 type WorkerPool struct {
@@ -249,7 +248,7 @@ func (w *WorkerPool) GracefulStop() {
 	w.state.Store(stateStopped)
 }
 
-// Stats is a configured value type.
+// Stats is a point-in-time view of pool depth and worker count.
 //
 // goalign:ignore
 type Stats struct {

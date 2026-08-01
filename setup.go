@@ -40,8 +40,6 @@ func (c *client) SetupWorker(ctx context.Context, setup WorkerSetup, handler Msg
 	if _, err := c.streams.CreateOrUpdateStream(ctx, setup.Stream); err != nil {
 		return nil, fmt.Errorf("setup worker create stream=%q: %w", setup.Stream.Name, err)
 	}
-	// Push subscribe creates the durable push consumer; pre-creating via the management
-	// API would make a pull consumer and break bound queue subscribe.
 	sub, err := c.consumer.QueueSubscribeBound(ctx, setup.Stream.Name, setup.Consumer.Durable, setup.Queue, setup.Subject, handler)
 	if err != nil {
 		return nil, fmt.Errorf("setup worker subscribe stream=%q durable=%q queue=%q subject=%q: %w",

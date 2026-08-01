@@ -28,7 +28,7 @@ type Connector interface {
 	AccountInfo(ctx context.Context) (*natspkg.AccountInfo, error)
 }
 
-// ConnectionStatus is a configured value type.
+// ConnectionStatus is a snapshot of connector health and reconnect state.
 //
 // goalign:ignore
 type ConnectionStatus struct {

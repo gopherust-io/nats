@@ -7,7 +7,7 @@ package bytesconv
 
 import "unsafe"
 
-// IsEmpty reports whether s has length 0.
+// IsEmpty reports whether s is empty.
 func IsEmpty(s string) bool {
 	return s == ""
 }
