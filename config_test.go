@@ -29,7 +29,7 @@ func TestDefaultConfig(t *testing.T) {
 	assert.True(t, cfg.RuntimeConsumer.FlowControl)
 	assert.Equal(t, defaultWorkerPoolSize, cfg.RuntimeConsumer.WorkerPoolSize)
 	assert.Equal(t, defaultWorkerBufferSize, cfg.RuntimeConsumer.WorkerBufferSize)
-	assert.Equal(t, BackpressureBlock, cfg.Backpressure.Mode)
+	assert.Equal(t, BackpressureNak, cfg.Backpressure.Mode)
 	assert.Equal(t, defaultMaxAckPending, cfg.Backpressure.MaxAckPending)
 	assert.Equal(t, defaultQueueDepthSampleInterval, cfg.Backpressure.QueueDepthSampleInterval)
 	assert.True(t, cfg.Metrics.AllowMetrics)

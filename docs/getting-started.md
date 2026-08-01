@@ -2,7 +2,7 @@
 
 Diagram-first setup: clone → dependencies → local JetStream → demos → tests → deeper docs.
 
-Shortcut path: `make nats-up && make demo-nats` (`make help` lists all targets).
+Shortcut path: start JetStream (nats-console `make nats-up`, or `nats-server -js`), then `make demo-nats` (`make help` lists all targets).
 
 ```mermaid
 flowchart LR
@@ -45,9 +45,15 @@ go mod download
 
 ## Step 2 — Start local JetStream
 
+Compose labs live in [nats-console](https://github.com/gopherust-io/nats-console/tree/main/docker/nats):
+
 ```bash
+# in nats-console
 make nats-up
+# or: nats-server -js
 ```
+
+See [Local Docker](nats/local-docker.md).
 
 ## Step 3 — Run the demo
 

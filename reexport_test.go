@@ -3,6 +3,7 @@ package nats
 import (
 	"context"
 	"errors"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -22,34 +23,25 @@ func TestShardReexports(t *testing.T) {
 func TestWithShadowReexport(t *testing.T) {
 	t.Parallel()
 	rec := NewFlightRecorder(8)
-	primaryCalls := 0
-	shadowCalls := 0
+	var primaryCalls, shadowCalls atomic.Int32
 
 	h := WithShadow(ShadowConfig{SampleRate: 1, Recorder: rec},
 		func(_ context.Context, _ *natspkg.Msg) error {
-			primaryCalls++
+			primaryCalls.Add(1)
 
 			return nil
 		},
 		func(_ context.Context, _ *natspkg.Msg) error {
-			shadowCalls++
+			shadowCalls.Add(1)
 
 			return errors.New("shadow diverged")
 		},
 	)
 
 	require.NoError(t, h(context.Background(), &natspkg.Msg{Subject: "orders.x", Data: bytesconv.StringToBytes("1")}))
-	assert.Equal(t, 1, primaryCalls)
-	assert.Equal(t, 1, shadowCalls)
-
-	// Allow async shadow recorder path to land.
-	deadline := time.Now().Add(time.Second)
-	for time.Now().Before(deadline) {
-		if len(rec.Snapshot()) > 0 {
-			break
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
+	assert.Equal(t, int32(1), primaryCalls.Load())
+	require.Eventually(t, func() bool { return shadowCalls.Load() == 1 }, time.Second, 5*time.Millisecond)
+	require.Eventually(t, func() bool { return len(rec.Snapshot()) > 0 }, time.Second, 5*time.Millisecond)
 
 	metrics := newClientMetrics(context.Background(), MetricsConfig{AllowMetrics: true, Prefix: "shadow"})
 	adapter := shadowMetricsAdapter{m: metrics}

@@ -3,7 +3,7 @@
 Production guide for **NATS server** topology (HA cluster / supercluster, robust JetStream, security) and for the **`github.com/gopherust-io/nats`** client (presets, resilience, performance, health).
 
 - Client stream/consumer knobs: [Recipes](recipes.md), [Optimal setups](optimal-setups.md), [Consumer tuning](consumer-tuning-guide.md), [Performance](../performance.md)
-- Local insecure labs: [Local Docker](local-docker.md) · [`docker/nats/`](../../docker/nats/)
+- Local insecure labs: [Local Docker](local-docker.md) · [nats-console `docker/nats`](https://github.com/gopherust-io/nats-console/tree/main/docker/nats)
 
 ```mermaid
 flowchart TB
@@ -82,7 +82,7 @@ Numbers by pattern: [Optimal setups](optimal-setups.md). Full configs: [Recipes]
 | `Storage` | `FileStorage` | `MemoryStorage` OK for local |
 | Retention | WorkQueue (jobs) or Limits (events/audit) | Limits |
 
-`Replicas: 3` requires a JetStream **cluster** ([Part B](#ha-cluster-configuration)). Drill failover with [Local Docker — 3-node cluster](local-docker.md#3-node-cluster).
+`Replicas: 3` requires a JetStream **cluster** ([Part B](#ha-cluster-configuration)). Drill failover with the [nats-console 5-node cluster lab](https://github.com/gopherust-io/nats-console/tree/main/docker/nats/cluster) (or run an odd-sized cluster with the conf shape below).
 
 ### Client connection HA
 
@@ -286,11 +286,11 @@ When a process is correctly tuned but lag still grows: add queue-group members, 
 
 ## Topology decision
 
-| Topology | When | Lab in this repo |
-|----------|------|------------------|
-| Single | Dev / CI only | [`docker/nats/single/nats.conf`](../../docker/nats/single/nats.conf) |
-| **HA cluster** (3 nodes) | Production JetStream + stream `Replicas: 3` | [`docker/nats/cluster/`](../../docker/nats/cluster/) |
-| **Supercluster** (gateways) | Multi-region / multi-AZ mesh | [`docker/nats/supercluster/`](../../docker/nats/supercluster/) |
+| Topology | When | Lab (nats-console) |
+|----------|------|-----|
+| Single | Dev / CI only | [`docker/nats/single`](https://github.com/gopherust-io/nats-console/tree/main/docker/nats/single) |
+| **HA cluster** (3 or 5 nodes) | Production JetStream + stream `Replicas: 3` / `5` | [`docker/nats/cluster`](https://github.com/gopherust-io/nats-console/tree/main/docker/nats/cluster) |
+| **Supercluster** (gateways) | Multi-region / multi-AZ mesh | [`docker/nats/supercluster`](https://github.com/gopherust-io/nats-console/tree/main/docker/nats/supercluster) |
 
 **Rules of thumb**
 
@@ -303,7 +303,7 @@ When a process is correctly tuned but lag still grows: add queue-group members, 
 
 ## HA cluster configuration
 
-Baseline (insecure lab): [`docker/nats/cluster/n1.conf`](../../docker/nats/cluster/n1.conf) (same shape on `n2` / `n3` with unique `server_name`).
+Baseline (insecure lab): [nats-console `n1.conf`](https://github.com/gopherust-io/nats-console/blob/main/docker/nats/cluster/n1.conf) (same shape on peers with unique `server_name`).
 
 ```conf
 # Lab shape — add TLS/auth before production (see Production security)
@@ -348,13 +348,13 @@ cfg.Conn.Address = "nats://nats-1:4222,nats://nats-2:4222,nats://nats-3:4222"
 // StreamConfig{ Replicas: 3, Storage: FileStorage, ... } — already in ProdWorkerConfig
 ```
 
-Failover drill (lab): [Local Docker — 3-node cluster](local-docker.md#3-node-cluster).
+Failover drill (lab): [nats-console 5-node cluster](https://github.com/gopherust-io/nats-console/tree/main/docker/nats/cluster).
 
 ---
 
 ## Supercluster configuration
 
-Baseline: [`docker/nats/supercluster/cluster-a/n1.conf`](../../docker/nats/supercluster/cluster-a/n1.conf) (east) and [`cluster-b/n1.conf`](../../docker/nats/supercluster/cluster-b/n1.conf) (west).
+Baseline: [nats-console east `n1.conf`](https://github.com/gopherust-io/nats-console/blob/main/docker/nats/supercluster/cluster-a/n1.conf) and [west `n1.conf`](https://github.com/gopherust-io/nats-console/blob/main/docker/nats/supercluster/cluster-b/n1.conf).
 
 Each region is a normal **cluster**; regions link with **gateways**. JetStream **domains stay regional** (`east` / `west` in the lab) unless you add mirrors/sources.
 
@@ -412,7 +412,7 @@ flowchart LR
 | JetStream geo | Domains are separate; use **mirrors / sources** for cross-region streams (ops cookbook — not covered here) |
 | Security | TLS on client, route, **and** gateway ports ([below](#production-security-approach)) |
 
-Lab: [Local Docker — mini supercluster](local-docker.md#mini-supercluster-2--2). Client scale notes: [Scaling — cluster capacity](scaling.md#cluster-capacity).
+Lab: [nats-console mini supercluster](https://github.com/gopherust-io/nats-console/blob/main/docs/local-docker.md#mini-supercluster-2--2). Client scale notes: [Scaling — cluster capacity](scaling.md#cluster-capacity).
 
 ---
 
@@ -562,7 +562,7 @@ accounts {
 
 #### AuthZ validation matrix (lab)
 
-Practice against [`docker/nats/auth`](../../docker/nats/auth/) (no TLS; local only):
+Practice against [nats-console `docker/nats/auth`](https://github.com/gopherust-io/nats-console/tree/main/docker/nats/auth) (no TLS; local only):
 
 | Client user | Should succeed | Should fail |
 |-------------|----------------|-------------|
@@ -572,7 +572,7 @@ Practice against [`docker/nats/auth`](../../docker/nats/auth/) (no TLS; local on
 
 **Suggested drill**
 
-1. `docker compose -f docker/nats/auth/docker-compose.yml up -d`
+1. In nats-console: `make nats-auth-up` (or `docker compose -f docker/nats/auth/docker-compose.yml up -d`)
 2. As `js-admin`: create stream `ORDERS` + durable `orders-processor`
 3. As `orders-pub`: publish; as `orders-worker`: consume
 4. Swap creds and confirm permissions violations on the wrong role
@@ -656,7 +656,7 @@ Do not expose `/varz` / `/jsz` to the public internet.
 - [ ] Failover drill on lab cluster before cutover
 - [ ] Stream retention bounds (`MaxBytes` / `MaxAge`) aligned with disk and [recipes](recipes.md)
 
-These conf snippets are **templates**. Promote via your platform — do **not** treat [`docker/nats/`](../../docker/nats/) Compose as a production deploy.
+These conf snippets are **templates**. Promote via your platform — do **not** treat [nats-console Compose labs](https://github.com/gopherust-io/nats-console/tree/main/docker/nats) as a production deploy.
 
 **Still external:** full JWT operator ceremony (`nsc`), leaf-node designs beyond `Mirror`/`Sources`, disk backup tooling, and Kubernetes Operator manifests — use upstream NATS operations docs / your platform team.
 
@@ -666,7 +666,7 @@ These conf snippets are **templates**. Promote via your platform — do **not** 
 
 | Guide | Topics |
 |-------|--------|
-| [Local Docker](local-docker.md) | Insecure single / cluster / supercluster labs |
+| [Local Docker](local-docker.md) | Pointer to nats-console Compose labs |
 | [Scaling](scaling.md) | Client scale-out; cluster capacity notes |
 | [Optimal setups](optimal-setups.md) | Starting numbers by workload |
 | [Recipes](recipes.md) | Copy-paste production **client** configs (incl. Recipe G) |
@@ -674,4 +674,4 @@ These conf snippets are **templates**. Promote via your platform — do **not** 
 | [Performance](../performance.md) | ThroughputConfig, codecs, alloc tips |
 | [Idempotency](idempotency.md) | Msg-Id + consume-side dedup |
 | [API reference](api-reference.md) | Connector, supervisor, DLQ, soft liveness |
-| [`docker/nats/`](../../docker/nats/) | Lab Compose + conf files |
+| [nats-console `docker/nats`](https://github.com/gopherust-io/nats-console/tree/main/docker/nats) | Lab Compose + conf files |

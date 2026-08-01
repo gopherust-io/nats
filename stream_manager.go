@@ -289,7 +289,11 @@ func (s *streamManager) GetNextMsgAfter(ctx context.Context, stream string, seq 
 		return nil, err
 	}
 
-	last := info.State.LastSeq
+	return s.getNextMsgAfterKnownLast(stream, seq, info.State.LastSeq)
+}
+
+// getNextMsgAfterKnownLast walks forward without a StreamInfo RPC (caller cached last).
+func (s *streamManager) getNextMsgAfterKnownLast(stream string, seq, last uint64) (*natspkg.RawStreamMsg, error) {
 	for next := seq + 1; next <= last; next++ {
 		msg, getErr := s.js.GetMsg(stream, next)
 		if getErr == nil {

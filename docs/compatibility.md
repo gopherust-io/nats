@@ -5,7 +5,7 @@
 | Go | See `go` directive in [`go.mod`](../go.mod) |
 | `github.com/nats-io/nats.go` | See `go.mod` require |
 | Embedded test server `nats-server/v2` | See `go.mod` require (currently `v2.14.x`) |
-| Docker lab image | `nats:2.14` under [`docker/nats/`](../docker/nats/) |
+| Docker lab image | `nats:2.14` in [nats-console `docker/nats`](https://github.com/gopherust-io/nats-console/tree/main/docker/nats) |
 
 Keep the **lab image major.minor** aligned with the `nats-server` module used in tests when bumping dependencies.
 

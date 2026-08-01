@@ -404,6 +404,7 @@ func (c *client) SupervisePullProcess(
 		if err != nil {
 			return err
 		}
+		defer pull.Close()
 
 		return pull.Process(runCtx, handler, opts...)
 	})

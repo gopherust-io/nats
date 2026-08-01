@@ -85,7 +85,7 @@ func (r *responder) wrap(parent context.Context, handler MsgHandler) natspkg.Msg
 		var handlerErr error
 		defer endSpanPtr(span, &handlerErr)
 
-		handlerErr = handler(spanCtx, msg)
+		handlerErr = invokeMsgHandler(spanCtx, msg, handler)
 		if handlerErr != nil {
 			r.recordError(spanCtx, msg.Subject)
 

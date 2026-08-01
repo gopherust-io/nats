@@ -3,7 +3,10 @@ package shadow
 import (
 	"context"
 	"errors"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	natspkg "github.com/nats-io/nats.go"
 	"github.com/stretchr/testify/assert"
@@ -13,28 +16,39 @@ import (
 )
 
 type memRecorder struct {
+	mu     sync.Mutex
 	events []struct{ detail, subject, err string }
 }
 
 func (r *memRecorder) RecordShadow(detail, subject, err string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.events = append(r.events, struct{ detail, subject, err string }{detail, subject, err})
+}
+
+func (r *memRecorder) snapshot() []struct{ detail, subject, err string } {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := make([]struct{ detail, subject, err string }, len(r.events))
+	copy(out, r.events)
+	return out
 }
 
 func TestWithPrimaryDrivesFate(t *testing.T) {
 	t.Parallel()
 	want := errors.New("primary fail")
-	shadowCalled := false
+	var shadowCalled atomic.Bool
 	h := With(Config{SampleRate: 1}, func(_ context.Context, _ *natspkg.Msg) error {
 		return want
 	}, func(_ context.Context, _ *natspkg.Msg) error {
-		shadowCalled = true
+		shadowCalled.Store(true)
 
 		return nil
 	})
 
 	err := h(context.Background(), &natspkg.Msg{Subject: "orders.x", Data: bytesconv.StringToBytes("1")})
 	require.ErrorIs(t, err, want)
-	assert.True(t, shadowCalled)
+	require.Eventually(t, shadowCalled.Load, time.Second, 5*time.Millisecond)
 }
 
 func TestWithMismatchRecorded(t *testing.T) {
@@ -47,14 +61,14 @@ func TestWithMismatchRecorded(t *testing.T) {
 	})
 
 	require.NoError(t, h(context.Background(), &natspkg.Msg{Subject: "a", Data: bytesconv.StringToBytes("x")}))
-	require.NotEmpty(t, rec.events)
-	found := false
-	for _, ev := range rec.events {
-		if ev.detail == "shadow_mismatch" {
-			found = true
+	require.Eventually(t, func() bool {
+		for _, ev := range rec.snapshot() {
+			if ev.detail == "shadow_mismatch" {
+				return true
+			}
 		}
-	}
-	assert.True(t, found)
+		return false
+	}, time.Second, 5*time.Millisecond)
 }
 
 func TestWithPanicRecovered(t *testing.T) {
@@ -67,8 +81,10 @@ func TestWithPanicRecovered(t *testing.T) {
 	})
 
 	require.NoError(t, h(context.Background(), &natspkg.Msg{Subject: "a", Data: bytesconv.StringToBytes("x")}))
-	require.NotEmpty(t, rec.events)
-	assert.Equal(t, "shadow_error", rec.events[0].detail)
+	require.Eventually(t, func() bool {
+		evs := rec.snapshot()
+		return len(evs) > 0 && evs[0].detail == "shadow_error"
+	}, time.Second, 5*time.Millisecond)
 }
 
 func TestCloneMsgOmitsReply(t *testing.T) {

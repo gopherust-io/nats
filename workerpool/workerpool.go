@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"runtime"
 	"sync"
 	"sync/atomic"
 
@@ -39,17 +38,19 @@ type task struct {
 type WorkerPool struct {
 	pool       sync.Pool
 	ctx        context.Context
-	input      chan *task
+	cond       *sync.Cond
 	registerFn msgFn
-
-	cancel context.CancelFunc
-	wg     sync.WaitGroup
-	len    int
-	depth  atomic.Int64
+	cancel     context.CancelFunc
+	input      chan *task
+	wg         sync.WaitGroup
+	len        int
+	depth      atomic.Int64
+	// inFlight counts handlers currently executing (depth is queue-only).
+	inFlight atomic.Int64
 	// publishers counts tryPublish callers past the accept gate until send/rollback completes.
 	publishers atomic.Int64
-
-	state atomic.Uint32
+	mu         sync.Mutex
+	state      atomic.Uint32
 }
 
 func New(ctx context.Context, workerPoolLen, messageBufLen int, registerFn msgFn) *WorkerPool {
@@ -75,6 +76,7 @@ func New(ctx context.Context, workerPoolLen, messageBufLen int, registerFn msgFn
 		cancel:     cancel,
 		ctx:        poolCtx,
 	}
+	pool.cond = sync.NewCond(&pool.mu)
 	pool.state.Store(stateRunning)
 	pool.pool.New = func() any {
 		return &task{}
@@ -109,7 +111,7 @@ func (w *WorkerPool) runner() {
 }
 
 // drain consumes remaining tasks after cancel until no publishers are in-flight
-// and the queue/in-flight depth is zero.
+// and the queue/handler depth is zero.
 func (w *WorkerPool) drain() {
 	for {
 		select {
@@ -120,16 +122,41 @@ func (w *WorkerPool) drain() {
 		default:
 		}
 
-		if w.publishers.Load() == 0 && w.depth.Load() == 0 {
+		if w.publishers.Load() == 0 && w.depth.Load() == 0 && w.inFlight.Load() == 0 {
 			return
 		}
 
-		runtime.Gosched()
+		w.mu.Lock()
+		for w.publishers.Load() != 0 || w.depth.Load() != 0 || w.inFlight.Load() != 0 {
+			// Re-check channel under wait cycles so newly queued tasks are taken.
+			select {
+			case t := <-w.input:
+				w.mu.Unlock()
+				w.process(t)
+				w.mu.Lock()
+
+				continue
+			default:
+			}
+			if w.publishers.Load() == 0 && w.depth.Load() == 0 && w.inFlight.Load() == 0 {
+				break
+			}
+			w.cond.Wait()
+		}
+		w.mu.Unlock()
 	}
+}
+
+func (w *WorkerPool) signalDrain() {
+	w.mu.Lock()
+	w.cond.Broadcast()
+	w.mu.Unlock()
 }
 
 func (w *WorkerPool) process(t *task) {
 	w.depth.Add(-1)
+	w.inFlight.Add(1)
+	w.signalDrain()
 
 	var err error
 	if t.applyFn && t.processFn != nil {
@@ -150,6 +177,9 @@ func (w *WorkerPool) process(t *task) {
 	t.applyFn = false
 	t.processFn = nil
 	w.pool.Put(t)
+
+	w.inFlight.Add(-1)
+	w.signalDrain()
 }
 
 func (w *WorkerPool) Publish(ctx context.Context, msg *nats.Msg, applyFn bool, processFn msgFn) {
@@ -173,7 +203,10 @@ func (w *WorkerPool) TryPublishNonBlocking(ctx context.Context, msg *nats.Msg, a
 func (w *WorkerPool) tryPublish(ctx context.Context, msg *nats.Msg, applyFn bool, processFn msgFn, nonBlocking bool) (bool, error) {
 	// Track in-flight publishers so GracefulStop cannot finish while a send may still land.
 	w.publishers.Add(1)
-	defer w.publishers.Add(-1)
+	defer func() {
+		w.publishers.Add(-1)
+		w.signalDrain()
+	}()
 
 	if w.state.Load() != stateRunning {
 		return false, ErrPoolStopped
@@ -196,6 +229,8 @@ func (w *WorkerPool) tryPublish(ctx context.Context, msg *nats.Msg, applyFn bool
 	if nonBlocking {
 		select {
 		case w.input <- t:
+			w.signalDrain()
+
 			return true, nil
 		default:
 			w.depth.Add(-1)
@@ -212,6 +247,8 @@ func (w *WorkerPool) tryPublish(ctx context.Context, msg *nats.Msg, applyFn bool
 
 	select {
 	case w.input <- t:
+		w.signalDrain()
+
 		return true, nil
 	case <-w.ctx.Done():
 		w.depth.Add(-1)
@@ -244,6 +281,7 @@ func (w *WorkerPool) GracefulStop() {
 	// Reject new publishes (state=draining) and unblock senders waiting on a full buffer.
 	// Workers drain remaining tasks; do not close input (avoids send-on-closed races).
 	w.cancel()
+	w.signalDrain()
 	w.wg.Wait()
 	w.state.Store(stateStopped)
 }
