@@ -45,8 +45,11 @@ func Encode(msg Message) ([]byte, error) {
 		if !ok {
 			return nil, fmt.Errorf("encode raw: %w", ErrInvalidTypeAssertion)
 		}
+		// Copy so async publish cannot race caller buffer reuse.
+		out := make([]byte, len(raw))
+		copy(out, raw)
 
-		return raw, nil
+		return out, nil
 	default:
 		return nil, fmt.Errorf("encode: %w", ErrInvalidMessageType)
 	}
@@ -113,12 +116,26 @@ func DecodeProto(data []byte, msg proto.Message) error {
 	return proto.Unmarshal(data, msg)
 }
 
+// DecodeMsg decodes msg into dst. Content-Encoding is expanded only when
+// decompress is desired by the caller via DecodeMsgWithDecompress, or when
+// the consumer already expanded the payload (header stripped). Prefer
+// processMessage PayloadDecompression for the hot path; this helper does not
+// auto-decompress so it cannot bypass RuntimeConsumerConfig.PayloadDecompression.
 func DecodeMsg(msg *natspkg.Msg, typ MessageType, dst any) error {
 	if typ == 0 {
 		typ = MessageTypeFromHeader(msg.Header)
 	}
 
 	return Decode(msg.Data, typ, dst)
+}
+
+// DecodeMsgWithDecompress expands Content-Encoding (size-capped) then decodes.
+func DecodeMsgWithDecompress(msg *natspkg.Msg, typ MessageType, dst any) error {
+	if err := maybeDecompressMsg(msg); err != nil {
+		return err
+	}
+
+	return DecodeMsg(msg, typ, dst)
 }
 
 func MessageTypeFromHeader(h natspkg.Header) MessageType {

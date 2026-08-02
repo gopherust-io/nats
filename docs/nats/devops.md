@@ -1,6 +1,6 @@
 # NATS production operations
 
-Production guide for **NATS server** topology (HA cluster / supercluster, robust JetStream, security) and for the **`github.com/gopherust-io/nats`** client (presets, resilience, performance, health).
+Production guide for **NATS server** topology (HA cluster / supercluster, robust JetStream, security) and for the **`github.com/gopherust-io/nats`** client (config recipes, resilience, performance, health).
 
 - Client stream/consumer knobs: [Recipes](recipes.md), [Optimal setups](optimal-setups.md), [Consumer tuning](consumer-tuning-guide.md), [Performance](../performance.md)
 - Local insecure labs: [Local Docker](local-docker.md) · [nats-console `docker/nats`](https://github.com/gopherust-io/nats-console/tree/main/docker/nats)
@@ -15,7 +15,7 @@ flowchart TB
   server --> sec[Production_security]
   sec --> authz[Subject_stream_AuthZ]
   lab[docker_nats_lab] -.->|baseline| server
-  client --> presets[Presets_recipes]
+  client --> recipes[Config_recipes]
   client --> recipeG[Recipe_G]
 ```
 
@@ -29,13 +29,13 @@ flowchart TB
 | Robust JetStream store limits, domains, route/gateway mesh | Kubernetes NATS Operator / HPA YAML |
 | Production security (TLS, authN/Z, **subject/stream permissions**, monitor lockdown) | Ready-made Grafana/Alertmanager packs |
 | Per-service publish vs subscribe allow lists (JetStream-aware) | Promoting lab Compose files as production |
-| Client presets, reconnect, probes, metrics, recovery | Exhaustive `$JS.API.*` matrix for every nats.go call |
+| Client recipes, reconnect, probes, metrics, recovery | Exhaustive `$JS.API.*` matrix for every nats.go call |
 
 **Do not** run the Compose stacks in this repo as production — they have no TLS or auth. Use them as labs; apply the server patterns below on your platform (VM, systemd, or operator).
 
 | Part | Jump |
 |------|------|
-| [Part A — Client](#part-a--client-library) | App presets, resilience, performance, client TLS |
+| [Part A — Client](#part-a--client-library) | App recipes, resilience, performance, client TLS |
 | [Part B — Server](#part-b--nats-server) | Topology, cluster, supercluster, security, ops checklist |
 | [Subject / stream AuthZ](#4-subject-and-stream-authorization) | Who may publish or consume which subjects |
 
@@ -45,30 +45,32 @@ flowchart TB
 
 ## Choose a robust baseline
 
-Start from a preset, then only override what your workload needs.
+Start from `DefaultConfig()`, then only override what your workload needs.
 
 ```
 Workload?
-├── Job queue / competing workers → ProdWorkerConfig()
-│     WorkQueue + FileStorage + Replicas 3 + worker pool + BackpressureNak
-├── Fan-out / event bus           → ProdFanOutConfig()
-│     LimitsPolicy + FileStorage + Replicas 3 + BackpressureBlock
-├── Max publish/consume QPS       → ThroughputConfig()
-│     Same as ProdWorker + metrics/tracing off + Lite/FixedCardinality
+├── Job queue / competing workers → DefaultConfig + job-worker knobs
+│     Client: worker pool + BackpressureNak
+│     Stream: WorkQueue + FileStorage + Replicas 3 (ops CreateOrUpdateStream)
+├── Fan-out / event bus           → DefaultConfig + Block backpressure + MaxAckPending 500
+│     Stream: LimitsPolicy + FileStorage + Replicas 3
+├── Max publish/consume QPS       → job-worker knobs + metrics/tracing off + Lite
 │     → see Performance guide
-└── Local laptop / CI             → DevConfig() or Recipe F
-      Memory storage, Replicas 1, reconnect off
+└── Local laptop / CI             → DefaultConfig + no reconnect / metrics off, or Recipe F
+      Memory storage, Replicas 1
 ```
 
-| Preset | Best for | Production defaults worth keeping |
-|--------|----------|-----------------------------------|
-| `ProdWorkerConfig()` | Job processors | `Replicas: 3`, `FileStorage`, WorkQueue, pool, Nak on full pool |
-| `ProdFanOutConfig()` | Many independent durables | `Replicas: 3`, Limits, Block backpressure |
-| `ThroughputConfig()` | Inner loops / load tests | Observability minimized; keep reconnect buffer unless fail-fast |
-| `DefaultConfig()` | Custom streams | Same resilient reconnect as prod presets |
-| `DevConfig()` | Dev only | No reconnect — do not ship |
+| Recipe | Best for | Key fields |
+|--------|----------|------------|
+| Job worker client | Job processors | pool 8·256, Nak, AckWait 45s — **not** stream HA |
+| Job stream | Job stream topology | `Replicas: 3`, `FileStorage`, WorkQueue |
+| Fan-out client | Event-bus clients | `BackpressureBlock`, `MaxAckPending: 500` |
+| Fan-out stream | Fan-out stream topology | `Replicas: 3`, `FileStorage`, Limits |
+| Max QPS | Inner loops / load tests | Observability minimized; keep reconnect buffer unless fail-fast |
+| `DefaultConfig()` alone | Custom streams | Resilient reconnect baseline |
+| Local / CI | Dev only | No reconnect — do not ship |
 
-Numbers by pattern: [Optimal setups](optimal-setups.md). Full configs: [Recipes](recipes.md). Connection defaults: [API reference](api-reference.md#connection-defaults-defaultconfig--prod-presets).
+Full snippets: [consumer tuning](consumer-tuning-guide.md) · [performance](../performance.md). Numbers by pattern: [Optimal setups](optimal-setups.md). Full configs: [Recipes](recipes.md). Connection defaults: [API reference](api-reference.md#connection-defaults-defaultconfig).
 
 ---
 
@@ -86,7 +88,7 @@ Numbers by pattern: [Optimal setups](optimal-setups.md). Full configs: [Recipes]
 
 ### Client connection HA
 
-Prod presets (`DefaultConfig`, `ProdWorkerConfig`, `ProdFanOutConfig`, `ThroughputConfig`) use:
+`DefaultConfig()` (and any recipe built on it, except local/CI) uses:
 
 - Unlimited reconnect (`MaxReconnect: -1`)
 - 16 MiB reconnect publish buffer (`ReconnectBufSize`)
@@ -137,9 +139,9 @@ Runnable reference: [`examples/nats/`](../../examples/nats/).
 
 | Lever | When |
 |-------|------|
-| `ThroughputConfig()` | Hot path; re-enable only the metrics you need |
+| Max-QPS recipe (metrics off) | Hot path; re-enable only the metrics you need |
 | Protobuf / `PublishBytes` | Encode cost dominates |
-| `SkipSubjectValidation` | Trusted static subjects (on in ThroughputConfig) |
+| `SkipSubjectValidation` | Trusted static subjects (on in max-QPS recipe) |
 | `Metrics.Lite` + `FixedCardinality` | Avoid gauge/subject cardinality tax |
 | AttrCache warmup | Avoid cold-path alloc on first message per subject |
 | Pull: larger batch + `WithProcessConcurrency(n)` | Ingest without per-message goroutine churn |
@@ -170,7 +172,7 @@ Lab Compose has **no TLS/auth**. Wire credentials and TLS on `Config.Conn` to ma
 | `CredentialsFile` | Operator JWT `.creds` / chained credentials file |
 
 ```go
-cfg := libnats.ProdWorkerConfig()
+cfg := libnats.DefaultConfig()
 cfg.Conn.Address = "nats://nats-1:4222,nats://nats-2:4222,nats://nats-3:4222"
 cfg.Conn.User = os.Getenv("NATS_USER")
 cfg.Conn.Password = os.Getenv("NATS_PASSWORD")
@@ -226,7 +228,7 @@ Optional: `Conn.HealthCheckInterval` starts a background ticker that logs failed
 
 ## Monitoring and alerts
 
-Default metric prefix: `nats`. Enable with `AllowMetrics: true` (on in prod presets; off in `ThroughputConfig` / `DevConfig`).
+Default metric prefix: `nats`. Enable with `AllowMetrics: true` (on in `DefaultConfig`; off in max-QPS / local recipes).
 
 | Group | Metric (suffix) | Alert idea |
 |-------|-----------------|------------|
@@ -343,9 +345,14 @@ cluster {
 | Streams | `Replicas: 3` + `FileStorage` for durable HA ([client HA](#high-availability-client-data--connection)) |
 
 ```go
-cfg := libnats.ProdWorkerConfig()
+cfg := libnats.DefaultConfig()
 cfg.Conn.Address = "nats://nats-1:4222,nats://nats-2:4222,nats://nats-3:4222"
-// StreamConfig{ Replicas: 3, Storage: FileStorage, ... } — already in ProdWorkerConfig
+stream := libnats.StreamConfig{
+    Name: "ORDERS", Subjects: []string{"orders.>"},
+    Storage: libnats.FileStorage, Retention: libnats.WorkQueuePolicy,
+    Replicas: 3, Discard: libnats.DiscardOld,
+}
+// _, err := client.Streams().CreateOrUpdateStream(ctx, stream)
 ```
 
 Failover drill (lab): [nats-console 5-node cluster](https://github.com/gopherust-io/nats-console/tree/main/docker/nats/cluster).
@@ -497,7 +504,7 @@ flowchart LR
   consSvc -->|"creds orders-worker"| auth
 ```
 
-Aligned with this repo’s recipes (`ProdWorkerConfig` / [Recipe A](recipes.md#recipe-a--worker--job-processor)): stream `ORDERS`, subjects `orders.>`, durable `orders-processor`.
+Aligned with this repo’s recipes (job-worker knobs / [Recipe A](recipes.md#recipe-a--worker--job-processor)): stream `ORDERS`, subjects `orders.>`, durable `orders-processor`.
 
 #### Role templates
 
@@ -591,7 +598,7 @@ One process = one role. Map env secrets to `Config.Conn`:
 
 ```go
 // orders-publisher service
-cfg := libnats.ProdWorkerConfig() // or a publisher-focused preset
+cfg := libnats.DefaultConfig() // apply job-worker knobs when consuming
 cfg.Conn.Address = "tls://nats-1:4222,tls://nats-2:4222,tls://nats-3:4222"
 cfg.Conn.User = os.Getenv("NATS_USER")         // orders-pub
 cfg.Conn.Password = os.Getenv("NATS_PASSWORD")
@@ -671,7 +678,7 @@ These conf snippets are **templates**. Promote via your platform — do **not** 
 | [Optimal setups](optimal-setups.md) | Starting numbers by workload |
 | [Recipes](recipes.md) | Copy-paste production **client** configs (incl. Recipe G) |
 | [Consumer tuning](consumer-tuning-guide.md) | Progressive tuning + metrics |
-| [Performance](../performance.md) | ThroughputConfig, codecs, alloc tips |
+| [Performance](../performance.md) | Max-QPS recipe, codecs, alloc tips |
 | [Idempotency](idempotency.md) | Msg-Id + consume-side dedup |
 | [API reference](api-reference.md) | Connector, supervisor, DLQ, soft liveness |
 | [nats-console `docker/nats`](https://github.com/gopherust-io/nats-console/tree/main/docker/nats) | Lab Compose + conf files |

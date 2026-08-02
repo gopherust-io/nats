@@ -79,19 +79,22 @@ Durable names are stable identities. Changing a durable's deliver policy require
 
 ## Queue groups (push scaling)
 
-Queue groups load-balance push delivery across multiple application instances subscribed to the same durable.
+Queue groups load-balance push delivery across multiple application instances subscribed to the same durable. JetStream stores that name as `DeliverGroup` on the push consumer; the library queue argument must match.
 
-| Rule | Example |
-|------|---------|
-| kebab-case service pool name | `orders-workers` |
-| Same name on every replica of the service | All pods use `orders-workers` |
-| Different from durable name | Durable: `orders-processor`, queue: `orders-workers` |
+| Rule | Example | Anti-pattern |
+|------|---------|--------------|
+| kebab-case service pool name | `orders-workers` | `Workers`, `q1` |
+| Same name on every replica of the service | All pods use `orders-workers` | Per-pod queue (`orders-workers-$POD_NAME`) |
+| Different from durable name | Durable: `orders-processor`, queue: `orders-workers` | Reusing the durable string as the only identity for unrelated pools |
+| Shared durable across replicas | Every pod binds `orders-processor` | Per-pod durable (`orders-processor-$POD_NAME`) — creates extra cursors, not worker scale |
 
 ```go
-// All replicas of orders-api use the same queue name.
+// All replicas of orders-api use the same queue name (= DeliverGroup).
 client.Consumer().QueueSubscribe(ctx, "orders-workers", "orders.>", handler,
     nats.BindStream("ORDERS"), nats.Durable("orders-processor"))
 ```
+
+See [Scaling — DeliverGroup](scaling.md#delivergroup-jetstream-name-for-the-queue-group).
 
 ## Connection client names
 
@@ -126,6 +129,6 @@ err := client.Streams().CreateOrUpdateStream(ctx, libnats.StreamConfig{
 | Stream | UPPER_SNAKE | `ORDERS` | `BindStream`, `CreateOrUpdateStream`, `Pull` |
 | Subject | dot.lower | `orders.order.created` | `Publish`, `Subscribe`, `FilterSubject` |
 | Durable | kebab-case | `orders-processor` | `Durable()`, `CreateOrUpdateConsumer` |
-| Queue group | kebab-case | `orders-workers` | `QueueSubscribe` |
+| Queue group / DeliverGroup | kebab-case | `orders-workers` | `QueueSubscribe`, push consumer `DeliverGroup` |
 
 See [Consumers & binding](consumers-and-binding.md) for how these names connect at runtime.

@@ -23,6 +23,7 @@ type Client interface {
 	Objects() ObjectStoreManager
 	Monitoring() Monitoring
 	Replay() Replay
+	Incidents() Incidents
 	// PublishRaw publishes bytes with optional headers and returns the JetStream ack.
 	PublishRaw(ctx context.Context, subject string, data []byte, headers map[string]string) (*PubAck, error)
 	SetupWorker(ctx context.Context, setup WorkerSetup, handler MsgHandler) (Subscription, error)
@@ -86,15 +87,20 @@ func NewClient(ctx context.Context, cfg *Config) (Client, error) {
 		return nil, fmt.Errorf("connect: %w", err)
 	}
 
-	js, err := nc.JetStream()
+	cl.conn = nc
+	cl.publisher = newPublisher(ctx, cfg.PublisherConfig, nil, nc, cfg.Conn.ReconnectBufSize, cl.metrics, metricsCfg.AllowTracing)
+
+	js, err := nc.JetStream(natspkg.PublishAsyncErrHandler(func(_ natspkg.JetStream, _ *natspkg.Msg, pubErr error) {
+		cl.publisher.noteAsyncErr(pubErr)
+	}))
 	if err != nil {
 		nc.Close()
 
 		return nil, fmt.Errorf("jetstream: %w", err)
 	}
 
-	cl.conn = nc
 	cl.js = js
+	cl.publisher.js = js
 
 	cl.collector = newMetricsCollector(ctx, nc, js, metricsCfg, cl.metrics)
 
@@ -104,8 +110,7 @@ func NewClient(ctx context.Context, cfg *Config) (Client, error) {
 	cl.objects = newObjectStoreManager(js)
 	cl.monitoring = newMonitoring(cfg.Conn.ConnectTimeout)
 	cl.replay = newReplay(cl.streams, cl.consumers)
-	cl.publisher = newPublisher(ctx, cfg.PublisherConfig, js, nc, cfg.Conn.ReconnectBufSize, cl.metrics, metricsCfg.AllowTracing)
-	cl.consumer = newConsumer(ctx, cfg.RuntimeConsumer, cfg.Backpressure, js, cl.metrics, metricsCfg.AllowTracing)
+	cl.consumer = newConsumer(ctx, cfg.RuntimeConsumer, cfg.Backpressure, js, cl.metrics, metricsCfg.AllowTracing, cfg.AdaptivePressure)
 	cl.requester = newRequester(cfg.RequesterConfig, nc, cl.metrics, metricsCfg.AllowTracing)
 	cl.responder = newResponder(cfg.ResponderConfig, nc, cl.metrics, metricsCfg.AllowTracing)
 

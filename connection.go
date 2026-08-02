@@ -96,10 +96,14 @@ func (c *client) configureOptions() ([]natspkg.Option, error) {
 
 	opts = appendBaseConnOptions(opts, conn)
 
-	authOpts, err := appendAuthOptions(opts, conn)
+	authOpts, kp, err := appendAuthOptions(opts, conn)
 	if err != nil {
 		return nil, err
 	}
+	if c.nkeyPair != nil {
+		c.nkeyPair.Wipe()
+	}
+	c.nkeyPair = kp
 
 	opts = authOpts
 
@@ -154,20 +158,28 @@ func appendBaseConnOptions(opts []natspkg.Option, conn Connection) []natspkg.Opt
 	return opts
 }
 
-func appendAuthOptions(opts []natspkg.Option, conn Connection) ([]natspkg.Option, error) {
+func appendAuthOptions(opts []natspkg.Option, conn Connection) ([]natspkg.Option, nkeys.KeyPair, error) {
 	if !bytesconv.IsEmpty(conn.CredentialsFile) {
 		opts = append(opts, natspkg.UserCredentials(conn.CredentialsFile))
 	}
 
+	var kp nkeys.KeyPair
 	if !bytesconv.IsEmpty(conn.Seed) {
-		kp, err := nkeys.FromSeed(bytesconv.StringToBytes(conn.Seed))
-		if err != nil {
-			return nil, fmt.Errorf("%w: %w", ErrInvalidNKeySeed, err)
+		seed := []byte(conn.Seed)
+		parsed, err := nkeys.FromSeed(seed)
+		for i := range seed {
+			seed[i] = 0
 		}
+		if err != nil {
+			return nil, nil, fmt.Errorf("%w: %w", ErrInvalidNKeySeed, err)
+		}
+		kp = parsed
 
 		pubKey, err := kp.PublicKey()
 		if err != nil {
-			return nil, fmt.Errorf("%w: public key: %w", ErrInvalidNKeySeed, err)
+			kp.Wipe()
+
+			return nil, nil, fmt.Errorf("%w: public key: %w", ErrInvalidNKeySeed, err)
 		}
 
 		opts = append(opts, natspkg.Nkey(pubKey, func(nonce []byte) ([]byte, error) {
@@ -183,7 +195,7 @@ func appendAuthOptions(opts []natspkg.Option, conn Connection) ([]natspkg.Option
 		opts = append(opts, natspkg.Token(conn.Secret))
 	}
 
-	return opts, nil
+	return opts, kp, nil
 }
 
 func appendReconnectOptions(opts []natspkg.Option, conn Connection) []natspkg.Option {
@@ -245,7 +257,16 @@ func appendTLSOptions(opts []natspkg.Option, cfg ConnectionTLS) ([]natspkg.Optio
 
 func buildTLSConfig(cfg ConnectionTLS) (*tls.Config, error) {
 	if cfg.Config != nil {
-		return cfg.Config, nil
+		tlsCfg := cfg.Config.Clone()
+		if tlsCfg.MinVersion == 0 || tlsCfg.MinVersion < tls.VersionTLS12 {
+			tlsCfg.MinVersion = tls.VersionTLS12
+		}
+		if tlsCfg.InsecureSkipVerify {
+			zerolog.Ctx(context.Background()).Warn().
+				Msg("NATS TLS InsecureSkipVerify enabled via custom tls.Config; server certificate will not be verified")
+		}
+
+		return tlsCfg, nil
 	}
 
 	hasMaterial := len(cfg.CA) > 0 || len(cfg.Cert) > 0 || len(cfg.Key) > 0 ||
@@ -518,8 +539,12 @@ func (c *client) HealthCheck(_ context.Context) error {
 		return ErrNatsConnectionNotEstablished
 	}
 
-	if c.js != nil {
-		if _, err := c.js.AccountInfo(); err != nil {
+	c.mu.RLock()
+	js := c.js
+	c.mu.RUnlock()
+
+	if js != nil {
+		if _, err := js.AccountInfo(); err != nil {
 			return fmt.Errorf("health check: %w", err)
 		}
 	}
@@ -550,16 +575,19 @@ func (c *client) startHealthCheck() {
 		return
 	}
 
-	c.healthCheck = time.NewTicker(c.config.Conn.HealthCheckInterval)
+	t := time.NewTicker(c.config.Conn.HealthCheckInterval)
+	c.healthCheck = t
+	c.healthCheckDone = make(chan struct{})
 
 	go func() {
-		defer c.healthCheck.Stop()
+		defer t.Stop()
+		defer close(c.healthCheckDone)
 
 		for {
 			select {
 			case <-c.ctx.Done():
 				return
-			case <-c.healthCheck.C:
+			case <-t.C:
 				err := c.HealthCheck(c.ctx)
 				if err != nil {
 					zerolog.Ctx(c.ctx).Warn().Err(err).Msg("health check failed")
@@ -586,9 +614,9 @@ func (c *client) Shutdown() error {
 func (c *client) shutdownGraceful() error {
 	var errs []error
 
+	// Stop the ticker; the goroutine owns a local reference and exits on ctx cancel.
 	if c.healthCheck != nil {
 		c.healthCheck.Stop()
-		c.healthCheck = nil
 	}
 
 	if c.collector != nil {
@@ -601,18 +629,41 @@ func (c *client) shutdownGraceful() error {
 		c.consumer.stop()
 	}
 
+	// Drain async publishes before cancelling publisher ctx / connection.
 	if c.publisher != nil {
+		drainTimeout := c.config.Conn.DrainTimeout
+		if drainTimeout <= 0 {
+			drainTimeout = defaultDrainTimeout
+		}
+		drainCtx, drainCancel := context.WithTimeout(context.Background(), drainTimeout)
+		if err := c.publisher.PublishAsyncComplete(drainCtx); err != nil &&
+			!errors.Is(err, context.DeadlineExceeded) && !errors.Is(err, context.Canceled) {
+			errs = append(errs, fmt.Errorf("async publish drain: %w", err))
+		}
+		drainCancel()
 		c.publisher.stop()
+	}
+
+	// Stop health-check before clearing conn/js so AccountInfo cannot race drain.
+	if c.cancel != nil {
+		c.cancel()
+		c.cancel = nil
+	}
+	if c.healthCheckDone != nil {
+		<-c.healthCheckDone
+		c.healthCheckDone = nil
 	}
 
 	if err := c.drainAndClose(); err != nil {
 		errs = append(errs, err)
 	}
 
-	if c.cancel != nil {
-		c.cancel()
-		c.cancel = nil
+	if c.nkeyPair != nil {
+		c.nkeyPair.Wipe()
+		c.nkeyPair = nil
 	}
+
+	c.healthCheck = nil
 
 	return errors.Join(errs...)
 }
@@ -621,6 +672,7 @@ func (c *client) drainAndClose() error {
 	c.mu.Lock()
 	nc := c.conn
 	c.conn = nil
+	c.js = nil
 	c.mu.Unlock()
 
 	if nc == nil {
@@ -632,30 +684,27 @@ func (c *client) drainAndClose() error {
 		timeout = defaultDrainTimeout
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	done := make(chan error, 1)
-
-	go func() { done <- nc.Drain() }()
-
-	select {
-	case err := <-done:
-		if err != nil {
-			nc.Close()
-
-			return fmt.Errorf("drain: %w", err)
-		}
-		// Drain already closed the connection on success.
-		return nil
-	case <-ctx.Done():
-		zerolog.Ctx(c.ctx).Warn().
-			Dur("timeout", timeout).
-			Msg("drain timeout, forcing close")
+	// Drain() only *starts* an async drain and returns immediately.
+	if err := nc.Drain(); err != nil {
 		nc.Close()
 
-		return fmt.Errorf("%w after %s: %w", ErrDrainTimeout, timeout, ctx.Err())
+		return fmt.Errorf("drain: %w", err)
 	}
+
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if nc.IsClosed() {
+			return nil
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	zerolog.Ctx(c.ctx).Warn().
+		Dur("timeout", timeout).
+		Msg("drain timeout, forcing close")
+	nc.Close()
+
+	return fmt.Errorf("%w after %s", ErrDrainTimeout, timeout)
 }
 
 var _ Connector = (*client)(nil)
@@ -684,8 +733,10 @@ type client struct {
 
 	cancel context.CancelFunc
 
-	healthCheck    *time.Ticker
-	reconnectCount int64
+	healthCheck     *time.Ticker
+	healthCheckDone chan struct{}
+	nkeyPair        nkeys.KeyPair
+	reconnectCount  int64
 
 	mu           sync.RWMutex
 	inLameDuck   bool

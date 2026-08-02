@@ -105,7 +105,7 @@ JetStream consumers have no server-side end sequence. `UntilSeq` / `UntilTime` /
 | `WithDeliverPolicy` / `WithStartSeq` / `WithStartTime` | Lower-level setters |
 | `WithMaxMessages(n)` | Cap for `GetMsgRange*` (`MsgRangeOpt`) |
 
-## Connection defaults (`DefaultConfig` / prod presets)
+## Connection defaults (`DefaultConfig`)
 
 | Field | Production-oriented default |
 |-------|-----------------------------|
@@ -116,21 +116,23 @@ JetStream consumers have no server-side end sequence. `UntilSeq` / `UntilTime` /
 | `PingInterval` / `MaxPingsOut` | `20s` / `3` |
 | `RetryOnFailedConnect` | `true` |
 | `InitialRetryAttempts` | `5` |
-| `AllowReconnect` | `true` (`DevConfig` sets `false` → `NoReconnect()`) |
+| `AllowReconnect` | `true` (local labs often set `false` → `NoReconnect()`) |
 | `RuntimeConsumer.IdleHeartbeat` | `5s` (non-queue push + pull Process default; `0` disables) |
 | `RuntimeConsumer.FlowControl` | `true` (with IdleHeartbeat on non-queue push) |
 
 Optional: `TLS` (`ConnectionTLS`), `DontRandomize`, `CustomReconnectDelay`, auth (`User`/`Password`, `Secret`, `Seed`, `CredentialsFile`).
 
-## Config presets
+## Config
 
-| Function | Description |
-|----------|-------------|
-| `DefaultConfig()` | Resilient reconnect defaults (see table above) |
-| `DevConfig()` | Local dev: no reconnect, memory storage, metrics off |
-| `ProdWorkerConfig()` | Job queue: WorkQueue, worker pool, BackpressureNak |
-| `ProdFanOutConfig()` | Event bus: LimitsPolicy, BackpressureBlock |
-| `ThroughputConfig()` | Job queue + metrics/tracing off, SkipSubjectValidation, Lite metrics |
+`DefaultConfig()` is the only factory. Apply workload recipes from [consumer tuning](consumer-tuning-guide.md) and [performance](../performance.md) (job worker, fan-out, local, max QPS). Stream HA is explicit:
+
+```go
+stream := libnats.StreamConfig{
+    Name: "ORDERS", Subjects: []string{"orders.>"},
+    Storage: libnats.FileStorage, Retention: libnats.WorkQueuePolicy, // or LimitsPolicy for fan-out
+    Replicas: 3, Discard: libnats.DiscardOld,
+}
+```
 
 ## Client
 
@@ -171,9 +173,19 @@ Optional: `TLS` (`ConnectionTLS`), `DontRandomize`, `CustomReconnectDelay`, auth
 | `PublishWithMsgID(ctx, subject, id, msg)` | Publish with dedup header |
 | `PublishProto(ctx, subject, proto)` | Publish protobuf |
 
-`Message.WithExpectedStream` / `WithExpectedLastSeq` / `WithExpectedLastSeqPerSubject` / `WithExpectedLastMsgID` set optimistic concurrency PubOpts. `StreamConfig.Mirror` / `Sources` configure mirror/source streams. `SetupWorker` applies only `Consumer.Durable` from `DurableConsumerConfig` (push bind creates the durable).
+`Message.WithExpectedStream` / `WithExpectedLastSeq` / `WithExpectedLastSeqPerSubject` / `WithExpectedLastMsgID` set optimistic concurrency PubOpts. `StreamConfig.Mirror` / `Sources` configure mirror/source streams.
+
+`SetupWorker` creates/updates the stream, bound queue-subscribes, then applies `DurableConsumerConfig` knobs (`MaxAckPending`, `AckWait`, `MaxDeliver`, Metadata, …) via subscribe opts + `UpdateConsumer`. Pass an explicit `StreamConfig` (WorkQueue|Limits + FileStorage + Replicas:3 for HA).
+
+`PublisherConfig.PayloadCompression = PayloadCompressionAuto` compresses bodies strictly larger than 32 KiB (br→gzip, shrink-only) and sets `Content-Encoding`. Forced: `PayloadCompressionGzip` / `PayloadCompressionBrotli`. `RuntimeConsumer.PayloadDecompression` (default on) expands before handlers.
+
+Decode helpers: `DecodeMsg` does **not** auto-decompress (use when the consumer already expanded, or for raw inspection). `DecodeMsgWithDecompress` expands `Content-Encoding` first, capped at `MaxPayloadDecompressBytes` (64 MiB) — returns `ErrPayloadTooLarge` if exceeded. Prefer consumer `PayloadDecompression` on the hot path.
 
 `PublisherConfig.SkipSubjectValidation` skips per-publish subject tokenization for trusted static subjects. `PublisherConfig.MaxAsyncPending` caps in-flight async publishes (default 1024, `-1` unlimited). Call `PublishAsyncComplete(ctx)` after a burst to drain pending acks.
+
+`Config.AdaptivePressure` (opt-in) adjusts pull `FetchBatch` and graduated `NakWithDelay` from pool depth. `client.Incidents()` captures forensic capsules (`Capture` / `Load` / `List` / `ReplayLocal`); `List(ctx, stream, consumer, indexBucket)` — empty `indexBucket` uses `DefaultIncidentIndexBucket`. `shadow.NewGraduate` ramps canary sample rate.
+
+`DurableConsumerConfig.DeliverSubject` / `DeliverGroup` are preserved across `ResetConsumer` and consumer-manager updates (empty `DeliverSubject` means pull).
 
 ## Requester / Responder (core NATS request-reply)
 
@@ -187,9 +199,12 @@ Not JetStream. Uses `nats.Conn.RequestMsgWithContext` and core `Subscribe` / `Qu
 | `Requester().RequestMsgPack` / `RequestMsgPackInto` | MessagePack |
 | `Requester().RequestProto` / `RequestProtoInto` | Protobuf (`proto.Message`) |
 | `Responder().Subscribe` / `QueueSubscribe` | Core reply handlers |
-| `RespondBytes` / `RespondJSON` / `RespondMsgPack` / `RespondProto` | Reply helpers |
+| `Responder().RespondBytes` / `RespondJSON` / `RespondMsgPack` / `RespondProto` | Reply helpers (**apply** `ResponderConfig.PayloadCompression`) |
+| Package `RespondBytes` / `RespondJSON` / … | Same encode/reply path **without** compression |
 
 `RequesterConfig.Timeout` applies when `ctx` has no deadline (default 2s). `AllowMetrics` / `AllowTracing` mirror publisher flags. Spans: `nats.request`, `nats.reply`.
+
+Payload compression (same >32 KiB + shrink-only rules as publish): `RequesterConfig.PayloadCompression` / `ResponderConfig.PayloadCompression` (default Off). `PayloadDecompression` defaults **true** on both — expands `Content-Encoding` on inbound replies (requester) and inbound requests (responder wrap) before handlers / Into decode.
 
 Do not use request/reply on subjects captured by a JetStream stream: the PubAck is written to the reply inbox and will be mistaken for the application response.
 
@@ -234,10 +249,13 @@ Prefer `github.com/gopherust-io/nats/shard`. Root `nats` re-exports the same hel
 |--------|-------------|
 | `DedupStore` | Interface: `Seen`, `Mark` |
 | `ClaimStore` | Optional: `Claim` / `Release` — used by `NewKVStore` for claim-before-process |
+| `ErrClaimInFlight` | Another worker holds a **pending** claim — Nak (do not Ack); completed claims still Ack (`Seen` true) |
 | `NewKVStore(kv)` | JetStream KV-backed `DedupStore`/`ClaimStore` (use a TTL'd bucket) |
 | `NewBloomStore(bits, hashes)` | In-memory probabilistic Seen; **not** ClaimStore — use with `WithBackend` or prefer KV for queues |
 | `WithHandler(store, extractID, handler)` | Wrap handler with consume-side dedup (ClaimStore path is race-safe for queues) |
 | `MsgIDFromHeader(msg)` | Read `Nats-Msg-Id` from message |
+
+Claim semantics: `Claim` acquires exclusive ownership; `Seen` is true only for **done** claims (not pending). On handler failure or `Mark` failure the pending claim is `Release`d so redelivery can reclaim.
 
 ## Tracing
 
@@ -257,7 +275,8 @@ Requires `tel.WrapContext` and OTLP collector on `TelConfig.Address` (same as me
 sub, err := client.SetupWorker(ctx, libnats.WorkerSetup{
     Stream: libnats.StreamConfig{
         Name: "ORDERS", Subjects: []string{"orders.>"},
-        Retention: libnats.WorkQueuePolicy, Replicas: 3, Storage: libnats.FileStorage,
+        Storage: libnats.FileStorage, Retention: libnats.WorkQueuePolicy,
+        Replicas: 3, Discard: libnats.DiscardOld, // Replicas: 1 for single-node lab
     },
     Consumer: libnats.DurableConsumerConfig{
         Durable: "orders-processor", FilterSubject: "orders.>",

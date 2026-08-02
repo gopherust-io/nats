@@ -2,12 +2,19 @@ package idempotency
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
 	natspkg "github.com/nats-io/nats.go"
 
 	libnats "github.com/gopherust-io/nats"
 	"github.com/gopherust-io/nats/internal/bytesconv"
 )
+
+// ErrClaimInFlight is returned when another worker holds a pending claim.
+// Callers should Nak (not Ack). Ack would drop the message if the holder
+// later fails and Releases. Completed claims still return nil (Ack).
+var ErrClaimInFlight = errors.New("idempotency: claim held by another worker")
 
 type DedupStore interface {
 	Seen(ctx context.Context, id string) (bool, error)
@@ -17,6 +24,7 @@ type DedupStore interface {
 // ClaimStore is an optional DedupStore that supports claim-before-process.
 // Claim acquires exclusive ownership of id (true if acquired).
 // Release drops a failed claim so another worker can retry.
+// Seen must return true only for completed (done) claims, not pending ones.
 type ClaimStore interface {
 	DedupStore
 	Claim(ctx context.Context, id string) (acquired bool, err error)
@@ -72,11 +80,30 @@ func withClaimHandler(
 	}
 
 	if !acquired {
-		return nil
+		done, seenErr := store.Seen(ctx, id)
+		if seenErr != nil {
+			return seenErr
+		}
+		if done {
+			return nil
+		}
+
+		return fmt.Errorf("%w: id=%q", ErrClaimInFlight, id)
 	}
 
 	if err := handler(ctx, msg); err != nil {
-		_ = store.Release(ctx, id)
+		if relErr := store.Release(ctx, id); relErr != nil {
+			return errors.Join(err, fmt.Errorf("idempotency release id=%q: %w", id, relErr))
+		}
+
+		return err
+	}
+
+	if err := store.Mark(ctx, id); err != nil {
+		// Drop the pending claim so redelivery can reclaim instead of looping on ErrClaimInFlight.
+		if relErr := store.Release(ctx, id); relErr != nil {
+			return errors.Join(err, fmt.Errorf("idempotency release after mark id=%q: %w", id, relErr))
+		}
 
 		return err
 	}

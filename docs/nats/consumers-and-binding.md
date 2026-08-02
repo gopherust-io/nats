@@ -131,13 +131,15 @@ client.Consumer().Subscribe(ctx, "orders.order.created", handler,
 
 ```go
 _, err := client.Consumer().QueueSubscribe(ctx,
-    "orders-workers",  // queue group (horizontal scale)
+    "orders-workers",  // queue group → consumer DeliverGroup (horizontal scale)
     "orders.>",       // must match consumer filter
     handler,
     nats.BindStream("ORDERS"),
     nats.Durable("orders-processor"),
 )
 ```
+
+The queue name becomes the push consumer’s `DeliverGroup`. Keep durable and queue names stable across replicas — details: [Scaling](scaling.md#delivergroup-jetstream-name-for-the-queue-group).
 
 ### Common binding errors
 

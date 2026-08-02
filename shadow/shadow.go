@@ -10,6 +10,8 @@ import (
 	"github.com/rs/zerolog"
 )
 
+const defaultShadowConcurrency = 32
+
 // Handler is a message handler (same signature as nats.MsgHandler).
 type Handler func(ctx context.Context, msg *natspkg.Msg) error
 
@@ -36,6 +38,8 @@ type Config struct {
 	// SampleRate is the fraction of messages sent to the shadow in (0,1].
 	// Zero (default) means 0.1 (10% canary). Set explicitly to 1 for always-on dual-run.
 	SampleRate float64
+	// MaxInFlight bounds concurrent shadow goroutines (default 32). Extra samples are dropped.
+	MaxInFlight int
 }
 
 func (c Config) withDefaults() Config {
@@ -45,6 +49,9 @@ func (c Config) withDefaults() Config {
 	}
 	if out.SampleRate > 1 {
 		out.SampleRate = 1
+	}
+	if out.MaxInFlight <= 0 {
+		out.MaxInFlight = defaultShadowConcurrency
 	}
 
 	return out
@@ -63,6 +70,7 @@ func With(cfg Config, primary, shadow Handler) Handler {
 	}
 
 	cfg = cfg.withDefaults()
+	sem := make(chan struct{}, cfg.MaxInFlight)
 
 	compare := cfg.Compare
 	if compare == nil {
@@ -78,10 +86,18 @@ func With(cfg Config, primary, shadow Handler) Handler {
 			return primaryErr
 		}
 
+		select {
+		case sem <- struct{}{}:
+		default:
+			return primaryErr
+		}
+
 		cloned := cloneMsg(msg)
 		subject := msg.Subject
-		shadowCtx := context.WithoutCancel(ctx)
-		go observeShadow(shadowCtx, cfg, shadow, cloned, subject, primaryErr, compare)
+		go func() {
+			defer func() { <-sem }()
+			observeShadow(ctx, cfg, shadow, cloned, subject, primaryErr, compare)
+		}()
 
 		return primaryErr
 	}

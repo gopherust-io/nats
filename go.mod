@@ -3,8 +3,10 @@ module github.com/gopherust-io/nats
 go 1.26.5
 
 require (
+	github.com/andybalholm/brotli v1.2.2
 	github.com/bytedance/sonic v1.15.2
 	github.com/gopherust-io/tel v0.4.0
+	github.com/klauspost/compress v1.19.1
 	github.com/nats-io/nats-server/v2 v2.14.4
 	github.com/nats-io/nats.go v1.52.0
 	github.com/nats-io/nkeys v0.4.16
@@ -32,7 +34,6 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gopherust-io/env v0.6.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.29.0 // indirect
-	github.com/klauspost/compress v1.19.1 // indirect
 	github.com/klauspost/cpuid/v2 v2.4.0 // indirect
 	github.com/mattn/go-colorable v0.1.15 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect

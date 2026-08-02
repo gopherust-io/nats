@@ -16,6 +16,27 @@ flowchart TB
 
 Same durable + same queue name (push) or multiple pull processes → each message is processed by **one** worker. More workers = more throughput, not fan-out.
 
+## Kubernetes scale does not multiply durables
+
+Scaling a Deployment (more pods) does **not** create more JetStream durables when every replica uses the **same** durable name. The server keeps **one** consumer cursor; the number of connected clients (queue-group members or pullers) grows.
+
+| Knob | Shared across replicas? |
+|------|-------------------------|
+| Stream | yes |
+| Durable name | yes (one cursor) |
+| Queue / `DeliverGroup` (push) | yes (same string) |
+| Pull durable | yes; no `DeliverGroup` needed |
+
+**Anti-pattern:** unique durable per pod (`orders-processor-$POD_NAME`). That creates many cursors — usually fan-out / duplicate work — not a shared job queue.
+
+```
+Deployment replicas: 3
+Durable name: "orders-processor"   ← same on every pod
+Queue / DeliverGroup: "orders-workers"   ← same on every pod (push)
+```
+
+→ 1 durable, 3 workers, messages are load-balanced.
+
 ## Comparison
 
 | Approach | Use when | Ordering |
@@ -36,9 +57,38 @@ client.Consumer().QueueSubscribeBound(ctx, "ORDERS", "orders-processor",
 - Use `WorkQueuePolicy` for job-queue semantics
 - See [Optimal setups — job queue](optimal-setups.md#pattern-1-job-queue--competing-workers)
 
+### DeliverGroup (JetStream name for the queue group)
+
+On the server, a **push** durable stores the competing-worker name as `DeliverGroup`. In this library that value is the `queue` argument to `QueueSubscribe` / `QueueSubscribeBound` / `SetupWorker` — not a field on `DurableConsumerConfig` (bind sets it). Raw / consol APIs can set `DeliverGroup` explicitly when creating the consumer.
+
+```mermaid
+flowchart TB
+  stream[Stream_ORDERS]
+  durable[Durable_orders_processor]
+  group[DeliverGroup_orders_workers]
+  stream --> durable
+  durable --> group
+  group --> podA[Pod_A]
+  group --> podB[Pod_B]
+  group --> podC[Pod_C]
+```
+
+| Rule | Detail |
+|------|--------|
+| Same string | Queue subscribe name must equal the consumer’s `DeliverGroup` |
+| Shared durable | All replicas bind the same durable name |
+| Config stability | Do not change `DeliverGroup` on an existing durable without an intentional recreate |
+| Pull | Competing pullers share one durable; they do **not** use `DeliverGroup` |
+
+**Ops notes**
+
+- `MaxAckPending` applies to the **whole** consumer, not per pod — size it for all replicas’ in-flight work.
+- On shutdown, drain / unsubscribe so in-flight messages are not stuck until `AckWait`.
+- Handlers should be idempotent: after a pod crash, redelivery may land on another replica.
+
 ## Pull consumer scale
 
-Multiple processes pull from the same durable; JetStream distributes batches.
+Multiple processes pull from the same durable; JetStream distributes batches. No `DeliverGroup` — only a shared durable name (see [Kubernetes scale](#kubernetes-scale-does-not-multiply-durables)).
 
 ```go
 pull.Process(ctx, handler, libnats.WithFetchBatch(100))

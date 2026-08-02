@@ -18,7 +18,7 @@ Ecosystem: [gopherust-io](https://github.com/gopherust-io/gopherust-io/blob/main
                            │
 ┌──────────────────────────▼──────────────────────────────────┐
 │  Client façade (package nats)                               │
-│  connection, config presets, managers, ack helpers          │
+│  connection, DefaultConfig, managers, ack helpers          │
 └──────────┬───────────────────────────────┬──────────────────┘
            │                               │
 ┌──────────▼──────────┐         ┌──────────▼──────────────────┐
@@ -39,7 +39,7 @@ Leaf packages (compose around handlers / subjects):
 
 | Path | Responsibility |
 |------|----------------|
-| `nats` (root) | `Client`, config presets, connection, publish/consume, KV/objects, R/R, monitoring, replay, supervisor |
+| `nats` (root) | `Client`, `DefaultConfig`, connection, publish/consume, KV/objects, R/R, monitoring, replay, supervisor |
 | `idempotency/` | Dedup / claim stores and handler wrappers |
 | `dlq/` | Dead-letter wrappers and autopsy helpers |
 | `shadow/` | Shadow-traffic middleware around handlers |
@@ -54,7 +54,7 @@ Leaf packages (compose around handlers / subjects):
 - **Ops owns streams; apps bind:** library assumes streams/consumers are declared out-of-band (CLI/platform); clients attach with bind-oriented APIs.
 - **Façade over managers:** prefer `Client` accessors (`Publisher`, `Consumer`, `KV`, …) rather than wiring raw JetStream handles in every call site.
 - **Handler Ack contract:** handlers own Ack/Nak/Term; helpers (`InProgress`, `NakWithDelay`, `TermWithReason`) keep semantics explicit.
-- **Presets over ad-hoc knobs:** start from `DefaultConfig` / `ProdWorkerConfig` / etc., then override.
+- **DefaultConfig + recipes:** start from `DefaultConfig`, apply documented knobs, then override.
 - **Leaf packages compose:** idempotency, DLQ, and shadow wrap handlers; they do not fork the core client.
 - **Telemetry optional:** metrics/tracing integrate with **tel** when present; core messaging must work without a collector.
 
@@ -80,7 +80,7 @@ type MsgHandler func(ctx context.Context, msg Msg) error
 
 Example: publish then consume on a bound consumer
 
-1. `cfg := nats.ProdWorkerConfig(); cfg.URL = …` → `NewClient(cfg)`.
+1. `cfg := nats.DefaultConfig(); /* apply recipe knobs */; cfg.Conn.Address = …` → `NewClient(cfg)`.
 2. Dial/reconnect via connector; managers lazy-init against JetStream.
 3. `Publisher().Publish…` encodes payload (JSON/MsgPack/Proto/bytes) and publishes to subject/stream.
 4. `Consumer(…)` / `PullConsumer(…)` binds to an existing consumer; handler runs with explicit Ack/Nak.
@@ -89,7 +89,7 @@ Example: publish then consume on a bound consumer
 
 ## Bootstrap / lifecycle
 
-1. Build `Config` from a preset (or explicit fields).
+1. Build `Config` from `DefaultConfig()` (or explicit fields + documented recipes).
 2. `NewClient` establishes the connection and exposes managers.
 3. Create publishers/consumers/workers; run until context cancel.
 4. Close client / supervised subscriptions on shutdown; flush as required by config.

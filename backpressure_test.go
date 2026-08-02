@@ -93,8 +93,11 @@ func TestHandlePoolBackpressureDropMode(t *testing.T) {
 		cfg:          RuntimeConsumerConfig{WorkerBufferSize: 1},
 		backpressure: BackpressureConfig{Mode: BackpressureDrop},
 	}
+	// Drop now Terms; unbound test msgs surface the Term error (not silent handle).
 	err := c.handlePoolBackpressure(ctx, &natspkg.Msg{Subject: "test"})
-	assert.ErrorIs(t, err, ErrBackpressureHandled)
+	require.Error(t, err)
+	assert.NotErrorIs(t, err, ErrBackpressureHandled)
+	assert.Contains(t, err.Error(), "backpressure drop term")
 }
 
 func TestHandlePoolBackpressureNakAndTerm(t *testing.T) {

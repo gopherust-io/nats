@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"runtime"
 
 	natspkg "github.com/nats-io/nats.go"
 
@@ -102,7 +103,7 @@ type autopsyInfo struct {
 //
 // Triggers:
 //   - handler returns ErrSendToDLQ (or wraps it)
-//   - metadata.NumDelivered >= cfg.MaxDeliver when MaxDeliver > 0
+//   - metadata.NumDelivered > cfg.MaxDeliver when MaxDeliver > 0
 func With(cfg Config, handler Handler) Handler {
 	if cfg.Publisher == nil {
 		return handler
@@ -116,9 +117,11 @@ func With(cfg Config, handler Handler) Handler {
 	cfg.Autopsy = cfg.Autopsy.withDefaults()
 
 	return func(ctx context.Context, msg *natspkg.Msg) error {
+		// Use > so MaxDeliver=N allows N handler attempts (not N-1).
 		if cfg.MaxDeliver > 0 {
-			if meta, err := msg.Metadata(); err == nil && meta != nil && meta.NumDelivered >= cfg.MaxDeliver {
+			if meta, err := msg.Metadata(); err == nil && meta != nil && meta.NumDelivered > cfg.MaxDeliver {
 				info := &autopsyInfo{Err: cfg.Reason}
+				fillAutopsyStack(info, cfg.Autopsy)
 				if routeErr := route(ctx, cfg, msg, cfg.Reason, info); routeErr != nil {
 					return routeErr
 				}
@@ -137,12 +140,26 @@ func With(cfg Config, handler Handler) Handler {
 
 		reason := "handler_requested"
 		info := &autopsyInfo{Err: err.Error()}
+		fillAutopsyStack(info, cfg.Autopsy)
 		if routeErr := route(ctx, cfg, msg, reason, info); routeErr != nil {
 			return fmt.Errorf("dlq after handler request: %w", routeErr)
 		}
 
 		return ErrDLQRouted
 	}
+}
+
+func fillAutopsyStack(info *autopsyInfo, cfg AutopsyConfig) {
+	if info == nil || !cfg.IncludeStack {
+		return
+	}
+	maxBytes := cfg.MaxStackBytes
+	if maxBytes <= 0 {
+		maxBytes = defaultAutopsyMaxStackBytes
+	}
+	buf := make([]byte, maxBytes)
+	n := runtime.Stack(buf, false)
+	info.Stack = string(buf[:n])
 }
 
 func route(ctx context.Context, cfg Config, msg *natspkg.Msg, reason string, autopsy *autopsyInfo) error {
@@ -173,6 +190,13 @@ func route(ctx context.Context, cfg Config, msg *natspkg.Msg, reason string, aut
 		applyAutopsyHeaders(headers, cfg.Autopsy, msg.Data, autopsy)
 	}
 
+	// Dedupe DLQ copies if Term fails and the message is redelivered.
+	if mid := headers[headerMsgID]; len(mid) == 0 || bytesconv.IsEmpty(mid[0]) {
+		if meta, err := msg.Metadata(); err == nil && meta != nil {
+			headers[headerMsgID] = []string{fmt.Sprintf("dlq-%s-%d", meta.Stream, meta.Sequence.Stream)}
+		}
+	}
+
 	pubErr := cfg.Publisher.PublishRaw(ctx, cfg.Subject, RawPublish{
 		Data:   msg.Data,
 		Header: headers,
@@ -181,8 +205,17 @@ func route(ctx context.Context, cfg Config, msg *natspkg.Msg, reason string, aut
 		return fmt.Errorf("publish to dlq subject=%q: %w", cfg.Subject, pubErr)
 	}
 
-	if termErr := msg.Term(); termErr != nil {
-		return fmt.Errorf("term after dlq subject=%q: %w", msg.Subject, termErr)
+	var termErr error
+	for range 3 {
+		termErr = msg.Term()
+		if termErr == nil {
+			break
+		}
+	}
+	if termErr != nil {
+		// Publish succeeded; return ErrDLQRouted so the consumer does not Nak
+		// (which would redeliver and duplicate the DLQ message).
+		return fmt.Errorf("%w: term after dlq subject=%q: %w", ErrDLQRouted, msg.Subject, termErr)
 	}
 
 	if cfg.Recorder != nil {

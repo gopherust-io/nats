@@ -48,6 +48,8 @@ func TestValidateMonitoringFetchURL(t *testing.T) {
 	ctx := t.Context()
 	require.Error(t, validateMonitoringFetchURL(ctx, mustURL(t, "http://169.254.169.254/latest/meta-data")))
 	require.Error(t, validateMonitoringFetchURL(ctx, mustURL(t, "http://metadata.google.internal/")))
+	require.Error(t, validateMonitoringFetchURL(ctx, mustURL(t, "http://100.100.100.200/")))
+	require.Error(t, validateMonitoringFetchURL(ctx, mustURL(t, "http://[fd00:ec2::254]/")))
 	require.Error(t, validateMonitoringFetchURL(ctx, mustURL(t, "ftp://127.0.0.1/jsz")))
 	require.NoError(t, validateMonitoringFetchURL(ctx, mustURL(t, "http://127.0.0.1:8222/jsz")))
 	require.NoError(t, validateMonitoringFetchURL(ctx, mustURL(t, "http://10.0.0.5:8222/varz")))

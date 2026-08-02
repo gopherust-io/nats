@@ -1,6 +1,6 @@
 # Consumer Tuning Guide
 
-Progressive tuning for **consume** paths (push handler / pull `Process`). Start from a preset, measure, change one layer at a time.
+Progressive tuning for **consume** paths (push handler / pull `Process`). Start from `DefaultConfig()`, apply a recipe below, measure, change one layer at a time.
 
 Understand the delivery model first: [How JetStream works](README.md) · [Push vs pull](push-vs-pull.md). Copy-paste baselines: [Optimal setups](optimal-setups.md) · [Recipes](recipes.md). Demo: [`examples/nats/`](../../examples/nats/).
 
@@ -20,25 +20,70 @@ flowchart LR
 
 ---
 
-## 1. Start from a preset
+## 1. Start from DefaultConfig + recipe
 
-Use a preset in [`nats/config.go`](../../nats/config.go) as your baseline, then tune from there:
+Use [`DefaultConfig()`](../../nats/config.go) as the only factory, then set fields for your pattern:
 
-| Preset | Use case | Key defaults |
-|--------|----------|--------------|
-| `DefaultConfig()` | Generic starting point | pool 4, buffer 64, `BackpressureBlock` |
-| `DevConfig()` | Local dev | pool 2, buffer 32, metrics off |
-| `ProdWorkerConfig()` | Job queue / competing workers | pool 8, buffer 256, `BackpressureNak`, `WorkQueuePolicy` |
-| `ProdFanOutConfig()` | Event bus (each service gets all events) | `BackpressureBlock`, `LimitsPolicy` |
+### Job queue (competing workers)
 
 ```go
-// Job queue worker — start here for competing consumers
-cfg := libnats.ProdWorkerConfig()
+cfg := libnats.DefaultConfig()
+cfg.RuntimeConsumer.WorkerPoolEnabled = true
+cfg.RuntimeConsumer.WorkerPoolSize = 8
+cfg.RuntimeConsumer.WorkerBufferSize = 256
+cfg.RuntimeConsumer.AckWait = 45 * time.Second
+cfg.RuntimeConsumer.PendingMsgLimit = 1000
+cfg.RuntimeConsumer.PendingMsgBuffer = 10 << 20 // 10 MiB
+cfg.Backpressure.Mode = libnats.BackpressureNak
+cfg.Backpressure.MaxAckPending = 1000
 
-// Event fan-out — each service gets every message
-cfg := libnats.ProdFanOutConfig()
+stream := libnats.StreamConfig{
+    Name: "ORDERS", Subjects: []string{"orders.>"},
+    Storage: libnats.FileStorage, Retention: libnats.WorkQueuePolicy,
+    Replicas: 3, Discard: libnats.DiscardOld, // Replicas: 1 for local lab
+}
 ```
 
+### Fan-out / event bus
+
+```go
+cfg := libnats.DefaultConfig()
+cfg.Backpressure.Mode = libnats.BackpressureBlock
+cfg.Backpressure.MaxAckPending = 500
+
+stream := libnats.StreamConfig{
+    Name: "EVENTS", Subjects: []string{"events.>"},
+    Storage: libnats.FileStorage, Retention: libnats.LimitsPolicy,
+    Replicas: 3, Discard: libnats.DiscardOld,
+}
+```
+
+### Local / CI
+
+```go
+cfg := libnats.DefaultConfig()
+cfg.Conn.AllowReconnect = false
+cfg.Conn.RetryOnFailedConnect = false
+cfg.Conn.InitialRetryAttempts = 1
+// AllowMetrics / AllowTracing off on Conn, Publisher, Requester, Responder, RuntimeConsumer, Metrics
+cfg.RuntimeConsumer.WorkerPoolEnabled = true
+cfg.RuntimeConsumer.WorkerPoolSize = 2
+cfg.RuntimeConsumer.WorkerBufferSize = 32
+```
+
+Max QPS (metrics off, SkipSubjectValidation, Lite): [Performance](../performance.md).
+
+<a id="adaptive-pressure"></a>
+
+### Adaptive Pressure (optional)
+
+Instead of hand-tuning `WithFetchBatch` / living with binary Nak, enable:
+
+```go
+cfg.AdaptivePressure = libnats.AdaptivePressureConfig{Enabled: true}
+```
+
+The controller shrinks fetch batch and applies `NakWithDelay` as pool fill / lag rises, and opens the window when idle. Keep `WithFetchBatch(N)` when you need a fixed batch for a specific Process loop.
 ---
 
 ## 2. Universal rules (apply first)
@@ -52,6 +97,9 @@ These apply to **both** push and pull:
 | `WorkerPoolSize` | **GOMAXPROCS** for CPU-bound; **2× cores** for I/O-bound |
 | `WorkerBufferSize` | **4–8× WorkerPoolSize** for bursty traffic (e.g. 8 workers → 256 buffer) |
 | Codec | Protobuf for throughput (~4× faster than JSON per [README benchmarks](../../README.md#codec-comparison-benchmarks)) |
+| `PayloadDecompression` | Leave **on** (DefaultConfig) if publishers may set `Content-Encoding`; cost is only paid on compressed messages |
+
+Large bodies: `PublisherConfig` / `RequesterConfig` / `ResponderConfig` `PayloadCompression` (`Off` / `Auto` / `Gzip` / `Brotli`) — see [Performance § Payload compression](../performance.md#payload-compression-nats-consol-parity). Use `Responder().Respond*` for compressed replies.
 
 Pre-warm telemetry AttrCache for known subjects at process start to avoid cold-path allocations:
 
@@ -61,7 +109,7 @@ for _, s := range []string{"orders.created", "orders.>"} {
 }
 ```
 
-For max QPS with observability minimized, use `libnats.ThroughputConfig()` — see [Performance](../performance.md).
+For max QPS with observability minimized, apply the max-QPS recipe in [Performance](../performance.md).
 
 
 ### Measuring p99 handler time
@@ -127,9 +175,9 @@ When the worker pool buffer is full:
 | Mode | Behavior | Use when |
 |------|----------|----------|
 | `BackpressureBlock` | Blocks NATS callback thread | Critical/financial paths, no silent loss |
-| `BackpressureNak` | NAK immediately, redeliver later | Bursty job queues (`ProdWorkerConfig` default) |
+| `BackpressureNak` | NAK immediately, redeliver later | Bursty job queues (job-worker recipe) |
 | `BackpressureTerm` | Terminal ack, skip message | Poison messages after `MaxDeliver` |
-| `BackpressureDrop` | Drop and log | Explicit opt-in lossy path |
+| `BackpressureDrop` | Term + log (leaves Ack-pending) | Explicit opt-in lossy path |
 
 ```go
 cfg.Backpressure.Mode          = libnats.BackpressureNak
@@ -152,7 +200,7 @@ pull.Process(ctx, handler,
 )
 ```
 
-**Important limitation:** pull `Process` handles messages **sequentially** within a batch. For more throughput, increase batch size and/or run multiple puller processes on the same durable.
+**Concurrency:** pull `Process` supports `WithProcessConcurrency(n)` (fixed worker set per batch) and can share the consumer worker pool. For more throughput, increase batch size, concurrency, and/or run multiple puller processes on the same durable. Opt-in `AdaptivePressure` can vary batch size automatically.
 
 ---
 
@@ -244,7 +292,7 @@ Tune `MaxWaiting` on the pull durable for concurrent fetch requests.
 
 Follow this loop each time you tune further:
 
-1. **Baseline** — start from `ProdWorkerConfig()` or `ProdFanOutConfig()` matching your pattern
+1. **Baseline** — start from `DefaultConfig()` + job-worker or fan-out recipe matching your pattern
 2. **Measure p99 handler time** — set `AckWait = 2–3× p99`
 3. **Right-size the pool** — start at `GOMAXPROCS`, watch `worker_queue_depth`
 4. **Set backpressure mode** — `Nak` for job queues, `Block` for critical paths

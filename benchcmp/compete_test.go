@@ -17,6 +17,38 @@ import (
 
 var sharedURL string
 
+// maxThroughputConfig mirrors the documented max-QPS recipe on DefaultConfig.
+func maxThroughputConfig() libnats.Config {
+	cfg := libnats.DefaultConfig()
+	cfg.RuntimeConsumer.WorkerPoolEnabled = true
+	cfg.RuntimeConsumer.WorkerPoolSize = 8
+	cfg.RuntimeConsumer.WorkerBufferSize = 256
+	cfg.RuntimeConsumer.AckWait = 45 * time.Second
+	cfg.RuntimeConsumer.PendingMsgLimit = 1000
+	cfg.RuntimeConsumer.PendingMsgBuffer = 10 << 20
+	cfg.Backpressure.Mode = libnats.BackpressureNak
+	cfg.Backpressure.MaxAckPending = 1000
+	cfg.PublisherConfig.AllowMetrics = false
+	cfg.PublisherConfig.AllowTracing = false
+	cfg.PublisherConfig.SkipSubjectValidation = true
+	cfg.RequesterConfig.AllowMetrics = false
+	cfg.RequesterConfig.AllowTracing = false
+	cfg.RequesterConfig.SkipSubjectValidation = true
+	cfg.ResponderConfig.AllowMetrics = false
+	cfg.ResponderConfig.AllowTracing = false
+	cfg.RuntimeConsumer.AllowMetrics = false
+	cfg.RuntimeConsumer.AllowTracing = false
+	cfg.Conn.AllowMetrics = false
+	cfg.Metrics.AllowMetrics = false
+	cfg.Metrics.AllowTracing = false
+	cfg.Metrics.CollectInterval = 60 * time.Second
+	cfg.Metrics.Lite = true
+	cfg.Metrics.FixedCardinality = true
+	cfg.Metrics.TrackedStreams = nil
+	cfg.Metrics.TrackedConsumers = nil
+	return cfg
+}
+
 func TestMain(m *testing.M) {
 	dir, err := os.MkdirTemp("", "nats-benchcmp-*")
 	if err != nil {
@@ -64,7 +96,7 @@ func ensureStream(tb testing.TB, js natspkg.JetStreamContext, name, subject stri
 func gopherustClient(tb testing.TB, stream, subject string) (libnats.Client, context.Context) {
 	tb.Helper()
 	ctx := context.Background()
-	cfg := libnats.ThroughputConfig()
+	cfg := maxThroughputConfig()
 	cfg.Conn.Address = sharedURL
 	// Direct handler path — fairer vs raw nats.go QueueSubscribe (no pool).
 	cfg.RuntimeConsumer.WorkerPoolEnabled = false

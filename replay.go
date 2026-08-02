@@ -171,6 +171,8 @@ func durableConfigFromNATS(cc natspkg.ConsumerConfig) DurableConsumerConfig {
 		Durable:           cc.Durable,
 		FilterSubject:     cc.FilterSubject,
 		FilterSubjects:    append([]string(nil), cc.FilterSubjects...),
+		DeliverSubject:    cc.DeliverSubject,
+		DeliverGroup:      cc.DeliverGroup,
 		DeliverPolicy:     cc.DeliverPolicy,
 		ReplayPolicy:      cc.ReplayPolicy,
 		AckPolicy:         cc.AckPolicy,
@@ -284,7 +286,7 @@ func validateReplayBounds(cfg ReplayConfig) error {
 		return fmt.Errorf("%w: bounds are not valid with FromNew", ErrInvalidReplayBound)
 	}
 
-	if cfg.untilSeqSet && cfg.optStartSeqSet && cfg.DeliverPolicy == DeliverByStartSequence && cfg.UntilSeq < cfg.OptStartSeq {
+	if cfg.untilSeqSet && cfg.optStartSeqSet && cfg.UntilSeq < cfg.OptStartSeq {
 		return fmt.Errorf("%w: untilSeq %d < startSeq %d", ErrInvalidReplayBound, cfg.UntilSeq, cfg.OptStartSeq)
 	}
 

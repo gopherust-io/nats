@@ -41,11 +41,11 @@ Core NATS pub/sub is fire-and-forget. This library is **JetStream-first**: persi
 | [Optimal setups](optimal-setups.md) | Starting values by workload pattern |
 | [Recipes](recipes.md) | Copy-paste production configs |
 | [Production operations](devops.md) | Client + server: HA cluster/supercluster, security, resilience, performance |
-| [Scaling](scaling.md) | Queue groups, pull replicas, sharding |
+| [Scaling](scaling.md) | Queue groups, DeliverGroup / K8s replicas, pull replicas, sharding |
 | [Idempotency](idempotency.md) | Publish Msg-Id + consume-side dedup |
 | [Naming conventions](naming-conventions.md) | Stream / durable / queue naming |
-| [API reference](api-reference.md) | Helpers, presets, supervisor, DLQ; leaf packages `dlq` / `shadow` / `shard` |
-| [Performance](../performance.md) | ThroughputConfig, codecs, alloc tips |
+| [API reference](api-reference.md) | Helpers, DefaultConfig, supervisor, DLQ; leaf packages `dlq` / `shadow` / `shard` |
+| [Performance](../performance.md) | Max-QPS recipe, codecs, alloc tips |
 | [Local Docker](local-docker.md) | Compose labs (nats-console `docker/nats`) |
 
 Runnable demo: [`examples/nats/`](../../examples/nats/) · Compose labs: [nats-console `docker/nats`](https://github.com/gopherust-io/nats-console/tree/main/docker/nats)
@@ -234,7 +234,10 @@ Do **not** put multiple durables on WorkQueue for the same job — they compete 
 |------|----------------|
 | **Durable** | Named JetStream consumer = one cursor |
 | **Queue group** | Competing processes on **the same** durable (each message → one member) |
+| **DeliverGroup** | JetStream field for that queue name on a **push** consumer (library: `queue` arg on `QueueSubscribe*`) |
 | **Separate durables** | Independent cursors (fan-out) |
+
+Scaling pods with the same durable does not create more durables — see [Scaling](scaling.md#kubernetes-scale-does-not-multiply-durables).
 
 ---
 
@@ -325,20 +328,20 @@ No .proto       → MessagePack
 Max throughput  → Protobuf or PublishBytes
 ```
 
-**Config preset**
+**Config recipe**
 
 ```
-Local          → DevConfig()
-Prod job queue → ProdWorkerConfig()
-Prod fan-out   → ProdFanOutConfig()
-Max QPS / load → ThroughputConfig()  (see Performance guide)
+Local          → DefaultConfig + no reconnect / metrics off
+Prod job queue → DefaultConfig + job-worker knobs (+ WorkQueue stream)
+Prod fan-out   → DefaultConfig + Block backpressure (+ Limits stream)
+Max QPS / load → job-worker knobs + metrics off  (see Performance guide)
 ```
 
 ---
 
 ## Connection resilience
 
-`DefaultConfig()`, `ProdWorkerConfig()`, `ProdFanOutConfig()`, and `ThroughputConfig()` use unlimited reconnect (`MaxReconnect: -1`), a 16 MiB reconnect publish buffer, and faster stale detection. `DevConfig()` disables reconnect.
+`DefaultConfig()` uses unlimited reconnect (`MaxReconnect: -1`), a 16 MiB reconnect publish buffer, and faster stale detection. Local/CI recipes typically disable reconnect.
 
 - `Connector().WaitConnected(ctx)` — wait through flaps
 - `ReconnectBufSize: -1` — fail publish immediately while disconnected (no buffer)

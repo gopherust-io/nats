@@ -115,6 +115,33 @@ func (r *recordingRec) RecordDLQAutopsy(string, string, string, string, string, 
 	r.autopsy = true
 }
 
+func TestWithAutopsyIncludeStack(t *testing.T) {
+	t.Parallel()
+	pub := &testPublisher{}
+	h := With(Config{
+		Publisher: pub,
+		Subject:   "orders.dlq",
+		Autopsy:   AutopsyConfig{Enabled: true, IncludeStack: true},
+	}, func(_ context.Context, _ *natspkg.Msg) error {
+		return ErrSendToDLQ
+	})
+
+	err := h(context.Background(), &natspkg.Msg{
+		Subject: "orders.created",
+		Data:    bytesconv.StringToBytes(`{"id":9}`),
+	})
+	// Term on unbound msg fails after publish — still assert DLQ payload headers.
+	require.Error(t, err)
+
+	pub.mu.Lock()
+	defer pub.mu.Unlock()
+	require.Len(t, pub.msgs, 1)
+	hdr := pub.msgs[0].Header
+	require.NotEmpty(t, hdr[HeaderAutopsyStack])
+	assert.Contains(t, hdr[HeaderAutopsyStack][0], "goroutine")
+	require.NotEmpty(t, hdr[HeaderAutopsyError])
+}
+
 func TestWithAutopsyPublishesHeaders(t *testing.T) {
 	t.Parallel()
 	rec := &recordingRec{}

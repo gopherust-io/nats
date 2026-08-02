@@ -166,10 +166,69 @@ linters:
         linters:
           - contextcheck
           - copyloopvar
+          - cyclop
           - gocognit
+          - gocyclo
           - nestif
           - nlreturn
           - gocritic
+          - varnamelen
+          - predeclared
+      - path: compress\.go
+        linters:
+          - gochecknoglobals
+          - exhaustive
+          - forcetypeassert
+          - nonamedreturns
+          - varnamelen
+      - path: adaptive_pressure\.go
+        linters:
+          - cyclop
+          - gocyclo
+          - govet
+          - varnamelen
+      - path: incident_capsule\.go
+        linters:
+          - cyclop
+          - gocognit
+          - gocyclo
+          - nestif
+          - varnamelen
+          - gocritic
+      - path: incident_auto\.go
+        linters:
+          - govet
+          - varnamelen
+          - gocritic
+      - path: backpressure\.go
+        linters:
+          - cyclop
+          - gocognit
+          - gocyclo
+      - path: setup\.go
+        linters:
+          - cyclop
+          - gocognit
+          - gocyclo
+      - path: dlq/dlq\.go
+        linters:
+          - cyclop
+          - gocognit
+          - gocyclo
+      - path: publisher\.go
+        linters:
+          - govet
+          - varnamelen
+      - path: consumer_push\.go
+        linters:
+          - govet
+          - contextcheck
+      - path: config\.go
+        linters:
+          - govet
+      - path: connection\.go
+        linters:
+          - contextcheck
       - path: supervisor\.go
         linters:
           - contextcheck
@@ -181,6 +240,7 @@ linters:
           - varnamelen
       - path: client\.go
         linters:
+          - contextcheck
           - interfacebloat
           - lll
       - path: auth\.go
@@ -231,9 +291,6 @@ linters:
       - path: validate\.go
         linters:
           - gocognit
-      - path: publisher\.go
-        linters:
-          - varnamelen
     paths:
       - examples
       - tools

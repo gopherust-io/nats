@@ -32,6 +32,8 @@ type requester struct {
 	allowMetrics          bool
 	allowTracing          bool
 	skipSubjectValidation bool
+	payloadCompression    PayloadCompressionMode
+	payloadDecompression  bool
 }
 
 func newRequester(cfg RequesterConfig, conn *natspkg.Conn, metrics *clientMetrics, allowTracing bool) *requester {
@@ -47,6 +49,8 @@ func newRequester(cfg RequesterConfig, conn *natspkg.Conn, metrics *clientMetric
 		allowMetrics:          cfg.AllowMetrics,
 		allowTracing:          allowTracing && cfg.AllowTracing,
 		skipSubjectValidation: cfg.SkipSubjectValidation,
+		payloadCompression:    cfg.PayloadCompression,
+		payloadDecompression:  cfg.PayloadDecompression,
 	}
 }
 
@@ -98,7 +102,7 @@ func (r *requester) RequestJSONInto(ctx context.Context, subject string, req, re
 	if err != nil {
 		return err
 	}
-
+	// RequestMessage already applied PayloadDecompression when enabled.
 	return Decode(reply.Data, JSON, resp)
 }
 
@@ -159,6 +163,8 @@ func (r *requester) RequestMessage(ctx context.Context, subject string, msg Mess
 		applyContentTypeHeader(&msg)
 	}
 
+	data, msg.Header = applyPayloadCompression(r.payloadCompression, data, msg.Header)
+
 	nmsg := &natspkg.Msg{
 		Subject: subject,
 		Data:    data,
@@ -176,6 +182,15 @@ func (r *requester) RequestMessage(ctx context.Context, subject string, msg Mess
 		r.recordError(spanCtx, subject)
 
 		return nil, fmt.Errorf("request subject=%q: %w", subject, err)
+	}
+
+	if r.payloadDecompression {
+		if err := maybeDecompressMsg(reply); err != nil {
+			reqErr = err
+			r.recordError(spanCtx, subject)
+
+			return nil, fmt.Errorf("request decompress reply subject=%q: %w", subject, err)
+		}
 	}
 
 	if r.allowMetrics && r.metrics != nil {

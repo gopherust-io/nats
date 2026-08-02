@@ -324,9 +324,9 @@ cfg.RuntimeConsumer.AllowMetrics = false
 cfg.Conn.AllowReconnect = false // wires NoReconnect()
 ```
 
-Or use `libnats.DevConfig()` which applies the same reconnect/metrics defaults (`NewClient` still does not create streams).
+Local labs often set reconnect/metrics off explicitly (`NewClient` still does not create streams).
 
-### Production connection knobs (inherited from `DefaultConfig`)
+### Production connection knobs (from `DefaultConfig`)
 
 | Field | Value | Why |
 |-------|-------|-----|
@@ -335,7 +335,7 @@ Or use `libnats.DevConfig()` which applies the same reconnect/metrics defaults (
 | `PingInterval` / `MaxPingsOut` | `20s` / `3` | Faster dead-peer detection |
 | `RetryOnFailedConnect` | `true` | Bootstrap through brief unavailability |
 
-See [API reference — Connection defaults](api-reference.md#connection-defaults-defaultconfig--prod-presets).
+See [API reference — Connection defaults](api-reference.md#connection-defaults-defaultconfig).
 
 See [Recipe F](recipes.md#recipe-f--development--local).
 
@@ -348,7 +348,7 @@ See [Recipe F](recipes.md#recipe-f--development--local).
 | `BackpressureBlock` (default) | Financial/critical paths; strict ordering; no silent loss |
 | `BackpressureNak` | Worker pools under burst; prefer redelivery over blocking NATS threads |
 | `BackpressureTerm` | Poison messages after `MaxDeliver` exhausted |
-| `BackpressureDrop` | Rare; explicit opt-in lossy path only |
+| `BackpressureDrop` | Rare; Terms + logs (opt-in lossy; clears Ack-pending) |
 
 Details: [Push vs pull — backpressure](push-vs-pull.md#backpressure-backpressureconfig).
 

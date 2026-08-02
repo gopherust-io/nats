@@ -42,6 +42,7 @@ type WorkerPool struct {
 	registerFn msgFn
 	cancel     context.CancelFunc
 	input      chan *task
+	stopped    chan struct{}
 	wg         sync.WaitGroup
 	len        int
 	depth      atomic.Int64
@@ -72,6 +73,7 @@ func New(ctx context.Context, workerPoolLen, messageBufLen int, registerFn msgFn
 	pool := &WorkerPool{
 		len:        workerPoolLen,
 		input:      make(chan *task, messageBufLen),
+		stopped:    make(chan struct{}),
 		registerFn: registerFn,
 		cancel:     cancel,
 		ctx:        poolCtx,
@@ -159,10 +161,13 @@ func (w *WorkerPool) process(t *task) {
 	w.signalDrain()
 
 	var err error
-	if t.applyFn && t.processFn != nil {
+	switch {
+	case t.applyFn && t.processFn != nil:
 		err = t.processFn(t.ctx, t.msg)
-	} else {
+	case w.registerFn != nil:
 		err = w.registerFn(t.ctx, t.msg)
+	default:
+		err = errors.New("worker pool: missing handler")
 	}
 
 	if err != nil {
@@ -182,6 +187,8 @@ func (w *WorkerPool) process(t *task) {
 	w.signalDrain()
 }
 
+// Publish enqueues with blocking backpressure. Errors are logged; prefer TryPublish
+// when the caller must observe enqueue failures (e.g. WaitGroup + Ack paths).
 func (w *WorkerPool) Publish(ctx context.Context, msg *nats.Msg, applyFn bool, processFn msgFn) {
 	_, err := w.tryPublish(ctx, msg, applyFn, processFn, false)
 	if err != nil {
@@ -226,6 +233,15 @@ func (w *WorkerPool) tryPublish(ctx context.Context, msg *nats.Msg, applyFn bool
 
 	w.depth.Add(1)
 
+	rollback := func() {
+		w.depth.Add(-1)
+		t.ctx = nil
+		t.msg = nil
+		t.applyFn = false
+		t.processFn = nil
+		w.pool.Put(t)
+	}
+
 	if nonBlocking {
 		select {
 		case w.input <- t:
@@ -233,13 +249,7 @@ func (w *WorkerPool) tryPublish(ctx context.Context, msg *nats.Msg, applyFn bool
 
 			return true, nil
 		default:
-			w.depth.Add(-1)
-
-			t.ctx = nil
-			t.msg = nil
-			t.applyFn = false
-			t.processFn = nil
-			w.pool.Put(t)
+			rollback()
 
 			return false, nil
 		}
@@ -250,14 +260,12 @@ func (w *WorkerPool) tryPublish(ctx context.Context, msg *nats.Msg, applyFn bool
 		w.signalDrain()
 
 		return true, nil
-	case <-w.ctx.Done():
-		w.depth.Add(-1)
+	case <-ctx.Done():
+		rollback()
 
-		t.ctx = nil
-		t.msg = nil
-		t.applyFn = false
-		t.processFn = nil
-		w.pool.Put(t)
+		return false, ctx.Err()
+	case <-w.ctx.Done():
+		rollback()
 
 		if w.state.Load() != stateRunning {
 			return false, ErrPoolStopped
@@ -272,18 +280,21 @@ func (w *WorkerPool) QueueDepth() int {
 }
 
 func (w *WorkerPool) GracefulStop() {
-	if !w.state.CompareAndSwap(stateRunning, stateDraining) {
+	if w.state.CompareAndSwap(stateRunning, stateDraining) {
+		zerolog.Ctx(w.ctx).Info().Msg("shutdown worker pool")
+
+		// Reject new publishes (state=draining) and unblock senders waiting on a full buffer.
+		// Workers drain remaining tasks; do not close input (avoids send-on-closed races).
+		w.cancel()
+		w.signalDrain()
+		w.wg.Wait()
+		w.state.Store(stateStopped)
+		close(w.stopped)
+
 		return
 	}
 
-	zerolog.Ctx(w.ctx).Info().Msg("shutdown worker pool")
-
-	// Reject new publishes (state=draining) and unblock senders waiting on a full buffer.
-	// Workers drain remaining tasks; do not close input (avoids send-on-closed races).
-	w.cancel()
-	w.signalDrain()
-	w.wg.Wait()
-	w.state.Store(stateStopped)
+	<-w.stopped
 }
 
 // Stats is a point-in-time view of pool depth and worker count.

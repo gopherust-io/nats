@@ -130,6 +130,44 @@ func disableTelemetry(cfg *Config) {
 	cfg.RuntimeConsumer.FlowControl = false
 }
 
+// jobWorkerConfig applies recommended job-queue client knobs on DefaultConfig.
+func jobWorkerConfig() Config {
+	cfg := DefaultConfig()
+	cfg.RuntimeConsumer.WorkerPoolEnabled = true
+	cfg.RuntimeConsumer.WorkerPoolSize = 8
+	cfg.RuntimeConsumer.WorkerBufferSize = 256
+	cfg.RuntimeConsumer.AckWait = 45 * time.Second
+	cfg.RuntimeConsumer.PendingMsgLimit = 1000
+	cfg.RuntimeConsumer.PendingMsgBuffer = 10 << 20
+	cfg.Backpressure.Mode = BackpressureNak
+	cfg.Backpressure.MaxAckPending = 1000
+	return cfg
+}
+
+// maxThroughputConfig applies job-worker knobs with observability minimized.
+func maxThroughputConfig() Config {
+	cfg := jobWorkerConfig()
+	cfg.PublisherConfig.AllowMetrics = false
+	cfg.PublisherConfig.AllowTracing = false
+	cfg.PublisherConfig.SkipSubjectValidation = true
+	cfg.RequesterConfig.AllowMetrics = false
+	cfg.RequesterConfig.AllowTracing = false
+	cfg.RequesterConfig.SkipSubjectValidation = true
+	cfg.ResponderConfig.AllowMetrics = false
+	cfg.ResponderConfig.AllowTracing = false
+	cfg.RuntimeConsumer.AllowMetrics = false
+	cfg.RuntimeConsumer.AllowTracing = false
+	cfg.Conn.AllowMetrics = false
+	cfg.Metrics.AllowMetrics = false
+	cfg.Metrics.AllowTracing = false
+	cfg.Metrics.CollectInterval = 60 * time.Second
+	cfg.Metrics.Lite = true
+	cfg.Metrics.FixedCardinality = true
+	cfg.Metrics.TrackedStreams = nil
+	cfg.Metrics.TrackedConsumers = nil
+	return cfg
+}
+
 func testClientWithOptions(t *testing.T, fn func(*Config)) (Client, context.Context) {
 	t.Helper()
 	ctx := context.Background()

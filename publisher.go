@@ -3,6 +3,7 @@ package nats
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	natspkg "github.com/nats-io/nats.go"
@@ -39,10 +40,14 @@ type publisher struct {
 	cancel                context.CancelFunc
 	metrics               *clientMetrics
 	maxAsyncPending       int
+	payloadCompression    PayloadCompressionMode
 	allowMetrics          bool
 	allowTracing          bool
 	skipSubjectValidation bool
 	reconnectBufDisabled  bool
+
+	asyncErrMu sync.Mutex
+	asyncErr   error
 }
 
 func newPublisher(
@@ -67,6 +72,7 @@ func newPublisher(
 		allowTracing:          allowTracing && cfg.AllowTracing,
 		skipSubjectValidation: cfg.SkipSubjectValidation,
 		maxAsyncPending:       maxAsync,
+		payloadCompression:    cfg.PayloadCompression,
 		reconnectBufDisabled:  reconnectBufSize < 0,
 	}
 	pub.ctx, pub.cancel = context.WithCancel(ctx)
@@ -131,6 +137,8 @@ func (p *publisher) preparePublish(ctx context.Context, subject string, msg Mess
 	if needsContentTypeHeader(msg) {
 		applyContentTypeHeader(&msg)
 	}
+
+	data, msg.Header = applyPayloadCompression(p.payloadCompression, data, msg.Header)
 
 	return preparedPublish{data: data, msg: msg}, span, nil
 }
@@ -319,13 +327,15 @@ func (p *publisher) PublishRaw(ctx context.Context, subject string, data []byte,
 		return nil, err
 	}
 
-	msg := &natspkg.Msg{Subject: subject, Data: data}
+	hdr := make(map[string][]string, len(headers))
 	for k, v := range headers {
-		if msg.Header == nil {
-			msg.Header = natspkg.Header{}
-		}
+		hdr[k] = []string{v}
+	}
+	data, hdr = applyPayloadCompression(p.payloadCompression, data, hdr)
 
-		msg.Header.Set(k, v)
+	msg := &natspkg.Msg{Subject: subject, Data: data}
+	if len(hdr) > 0 {
+		msg.Header = natspkg.Header(hdr)
 	}
 
 	ack, err := p.js.PublishMsg(msg)
@@ -387,16 +397,48 @@ func (p *publisher) recordAsyncAccepted(ctx context.Context, subject string, byt
 	p.metrics.recordBytesLatency(ctx, p.metrics.publishBytes, nil, subject, bytes, 0)
 }
 
+func (p *publisher) noteAsyncErr(err error) {
+	if p == nil || err == nil {
+		return
+	}
+	p.asyncErrMu.Lock()
+	if p.asyncErr == nil {
+		p.asyncErr = err
+	}
+	p.asyncErrMu.Unlock()
+	if p.allowMetrics && p.metrics != nil {
+		p.recordError(context.Background(), "")
+	}
+}
+
+func (p *publisher) takeAsyncErr() error {
+	p.asyncErrMu.Lock()
+	err := p.asyncErr
+	p.asyncErr = nil
+	p.asyncErrMu.Unlock()
+
+	return err
+}
+
 // PublishAsyncComplete waits until all outstanding async publishes have completed
 // or ctx is cancelled. Call after a burst of PublishAsync* to drain futures.
+// Returns the first async publish error observed via PublishAsyncErrHandler, if any.
 func (p *publisher) PublishAsyncComplete(ctx context.Context) error {
 	done := p.js.PublishAsyncComplete()
 	select {
 	case <-done:
-		return nil
+		return p.takeAsyncErr()
 	case <-ctx.Done():
+		if err := p.takeAsyncErr(); err != nil {
+			return err
+		}
+
 		return ctx.Err()
 	case <-p.ctx.Done():
+		if err := p.takeAsyncErr(); err != nil {
+			return err
+		}
+
 		return p.ctx.Err()
 	}
 }

@@ -36,5 +36,6 @@ func TestCommonWildcardSubject(t *testing.T) {
 	assert.Empty(t, commonWildcardSubject([]string{"orders", "payments"}))
 	assert.Empty(t, commonWildcardSubject(nil))
 	assert.Equal(t, ">", consumerFilterSubjects(nil))
-	assert.Equal(t, "shared.>", commonWildcardSubject([]string{"shared", "sharedx"}))
+	// Mid-token character prefix must not invent a bogus wildcard.
+	assert.Empty(t, commonWildcardSubject([]string{"shared", "sharedx"}))
 }
