@@ -83,3 +83,57 @@ func TestShutdownDrainsConnection(t *testing.T) {
 	require.NoError(t, client.Connector().Shutdown())
 	require.False(t, client.Connector().IsConnected())
 }
+
+func TestNakRemainingNilSafe(t *testing.T) {
+	t.Parallel()
+	nakRemaining(nil)
+	nakRemaining([]*natspkg.Msg{nil})
+}
+
+func TestPullProcessWithWorkerPool(t *testing.T) {
+	t.Parallel()
+
+	client, ctx := testClientWithOptions(t, func(cfg *Config) {
+		cfg.RuntimeConsumer.WorkerPoolEnabled = true
+		cfg.RuntimeConsumer.WorkerPoolSize = 2
+		cfg.RuntimeConsumer.WorkerBufferSize = 8
+	})
+	stream := uniqueStream(t, "PULLPOOL")
+	prefix := streamSubjectPrefix(stream)
+	durable := uniqueDurable(t, "pullpool")
+
+	_, err := client.Streams().CreateOrUpdateStream(ctx, StreamConfig{
+		Name: stream, Subjects: []string{prefix + ">"}, Storage: MemoryStorage, Replicas: 1,
+	})
+	require.NoError(t, err)
+	_, err = client.Consumers().CreateOrUpdateConsumer(ctx, stream, DurableConsumerConfig{
+		Durable: durable, FilterSubject: prefix + ">", MaxAckPending: 100,
+	})
+	require.NoError(t, err)
+
+	for range 3 {
+		require.NoError(t, client.Publisher().PublishBytes(ctx, prefix+"x", []byte("m")))
+	}
+
+	done := make(chan struct{})
+	var n int
+	go func() {
+		pull, pullErr := client.Consumer().Pull(stream, durable)
+		require.NoError(t, pullErr)
+		runCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+		_ = pull.Process(runCtx, func(_ context.Context, _ *natspkg.Msg) error {
+			n++
+			if n >= 3 {
+				close(done)
+			}
+			return nil
+		}, WithFetchBatch(3), WithProcessMaxWait(500*time.Millisecond))
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(8 * time.Second):
+		t.Fatal("timeout waiting for pull pool process")
+	}
+}

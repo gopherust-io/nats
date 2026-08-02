@@ -103,20 +103,47 @@ func TestIncidentCapsuleListDefaultIndex(t *testing.T) {
 
 func TestCapsuleAutoRecorders(t *testing.T) {
 	t.Parallel()
-	client, _ := testClient(t)
+	client, ctx := testClient(t)
+	stream := uniqueStream(t, "CAPAUTO")
+	prefix := streamSubjectPrefix(stream)
+	subject := prefix + "evt"
+
+	_, err := client.Streams().CreateOrUpdateStream(ctx, StreamConfig{
+		Name: stream, Subjects: []string{prefix + ">"}, Storage: MemoryStorage, Replicas: 1,
+	})
+	require.NoError(t, err)
+	require.NoError(t, client.Publisher().PublishJSON(ctx, subject, map[string]string{"k": "v"}))
+	last, err := client.Replay().GetLastMsgForSubject(ctx, stream, subject)
+	require.NoError(t, err)
+
 	var got IncidentTrigger
-	auto := NewCapsuleAuto(client, "ORDERS", "worker", CapsuleAutoConfig{
+	auto := NewCapsuleAuto(client, stream, "worker", CapsuleAutoConfig{
 		Enabled: true,
 		OnReady: func(c *Capsule) {
 			got = c.Trigger
 		},
 	})
 	// Shadow path does not need JetStream seq; Capture still writes an empty-message capsule.
-	auto.ShadowRecorder().RecordShadow("shadow_mismatch", "orders.x", "diff")
+	auto.ShadowRecorder().RecordShadow("shadow_mismatch", subject, "diff")
 	assert.Equal(t, TriggerShadowMismatch, got)
 
-	auto.OnAnomaly()(BehaviorAnomalyEvent{Stream: "ORDERS", Durable: "worker"})
+	auto.OnAnomaly()(BehaviorAnomalyEvent{Stream: stream, Durable: "worker"})
 	assert.Equal(t, TriggerAnomaly, got)
+
+	rec := auto.DLQRecorder()
+	rec.RecordDLQ(subject, stream, "worker", "poison", last.Sequence)
+	assert.Equal(t, TriggerDLQ, got)
+	rec.RecordDLQAutopsy(subject, stream, "worker", "poison", "stack", last.Sequence)
+	assert.Equal(t, TriggerDLQ, got)
+
+	msg := &CapsuleMessage{Header: map[string][]string{
+		"Authorization": {"secret"},
+		"X-Api-Key":     {"k"},
+	}}
+	defaultCapsuleRedact(msg)
+	assert.Equal(t, []string{"[redacted]"}, msg.Header["Authorization"])
+	assert.Equal(t, []string{"[redacted]"}, msg.Header["X-Api-Key"])
+	defaultCapsuleRedact(nil)
 }
 
 func TestIncidentCapsuleReplayLocalEmpty(t *testing.T) {
