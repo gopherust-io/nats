@@ -2,16 +2,25 @@ package nats
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
 	"github.com/gopherust-io/nats/internal/bytesconv"
 )
 
-const defaultMonitoringTimeout = 10 * time.Second
+const (
+	defaultMonitoringTimeout = 10 * time.Second
+	defaultMonitoringMaxBody = 8 << 20 // 8 MiB
+)
+
+// ErrMonitoringBodyTooLarge is returned when a monitoring response exceeds the size cap.
+var ErrMonitoringBodyTooLarge = errors.New("monitoring response body too large")
 
 // Monitoring fetches NATS server monitoring HTTP endpoints (/varz, /jsz, …).
 type Monitoring interface {
@@ -21,7 +30,8 @@ type Monitoring interface {
 }
 
 type monitoringClient struct {
-	http *http.Client
+	http    *http.Client
+	maxBody int64
 }
 
 func newMonitoring(timeout time.Duration) Monitoring {
@@ -29,8 +39,32 @@ func newMonitoring(timeout time.Duration) Monitoring {
 		timeout = defaultMonitoringTimeout
 	}
 
+	var transport *http.Transport
+	if base, ok := http.DefaultTransport.(*http.Transport); ok {
+		transport = base.Clone()
+	} else {
+		transport = &http.Transport{}
+	}
+	transport.DialContext = dialMonitoringContext
+
+	client := &http.Client{
+		Timeout:   timeout,
+		Transport: transport,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 5 {
+				return errors.New("monitoring redirect: stopped after 5 redirects")
+			}
+			if err := validateMonitoringFetchURL(req.Context(), req.URL); err != nil {
+				return err
+			}
+
+			return nil
+		},
+	}
+
 	return &monitoringClient{
-		http: &http.Client{Timeout: timeout},
+		http:    client,
+		maxBody: defaultMonitoringMaxBody,
 	}
 }
 
@@ -46,7 +80,16 @@ func (m *monitoringClient) Fetch(ctx context.Context, baseURL, path string) ([]b
 		path = "/" + path
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+path, http.NoBody)
+	rawURL := baseURL + path
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return nil, fmt.Errorf("monitoring request: %w", err)
+	}
+	if validateErr := validateMonitoringFetchURL(ctx, parsed); validateErr != nil {
+		return nil, validateErr
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, http.NoBody)
 	if err != nil {
 		return nil, fmt.Errorf("monitoring request: %w", err)
 	}
@@ -57,9 +100,17 @@ func (m *monitoringClient) Fetch(ctx context.Context, baseURL, path string) ([]b
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	body, err := io.ReadAll(resp.Body)
+	maxBody := m.maxBody
+	if maxBody <= 0 {
+		maxBody = defaultMonitoringMaxBody
+	}
+	limited := io.LimitReader(resp.Body, maxBody+1)
+	body, err := io.ReadAll(limited)
 	if err != nil {
 		return nil, fmt.Errorf("monitoring read: %w", err)
+	}
+	if int64(len(body)) > maxBody {
+		return nil, fmt.Errorf("%w: exceeds %d bytes", ErrMonitoringBodyTooLarge, maxBody)
 	}
 
 	if resp.StatusCode >= http.StatusBadRequest {
@@ -67,4 +118,77 @@ func (m *monitoringClient) Fetch(ctx context.Context, baseURL, path string) ([]b
 	}
 
 	return body, nil
+}
+
+func dialMonitoringContext(ctx context.Context, network, addr string) (net.Conn, error) {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return nil, err
+	}
+	ips, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+	if err != nil {
+		return nil, fmt.Errorf("monitoring dns: %w", err)
+	}
+	var dialer net.Dialer
+	var lastErr error
+	for _, ipAddr := range ips {
+		if isBlockedMonitoringIP(ipAddr.IP) {
+			lastErr = errors.New("monitoring url host not allowed")
+
+			continue
+		}
+		conn, dialErr := dialer.DialContext(ctx, network, net.JoinHostPort(ipAddr.IP.String(), port))
+		if dialErr == nil {
+			return conn, nil
+		}
+		lastErr = dialErr
+	}
+	if lastErr == nil {
+		lastErr = errors.New("monitoring url host not allowed")
+	}
+
+	return nil, lastErr
+}
+
+func isBlockedMonitoringIP(ip net.IP) bool {
+	return ip == nil || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified()
+}
+
+// validateMonitoringFetchURL blocks link-local / cloud-metadata targets after
+// parse and on redirects. Loopback and RFC1918 remain allowed for self-hosted labs.
+func validateMonitoringFetchURL(ctx context.Context, fetchURL *url.URL) error {
+	if fetchURL == nil {
+		return errors.New("monitoring url host not allowed")
+	}
+	switch strings.ToLower(fetchURL.Scheme) {
+	case "http", "https":
+	default:
+		return errors.New("monitoring url scheme must be http or https")
+	}
+	host := strings.ToLower(strings.TrimSpace(fetchURL.Hostname()))
+	if bytesconv.IsEmpty(host) {
+		return errors.New("monitoring url host not allowed")
+	}
+	switch host {
+	case "metadata.google.internal", "metadata.goog":
+		return errors.New("monitoring url host not allowed")
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		if isBlockedMonitoringIP(ip) {
+			return errors.New("monitoring url host not allowed")
+		}
+
+		return nil
+	}
+	addrs, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+	if err != nil {
+		return fmt.Errorf("monitoring dns: %w", err)
+	}
+	for _, ipAddr := range addrs {
+		if isBlockedMonitoringIP(ipAddr.IP) {
+			return errors.New("monitoring url host not allowed")
+		}
+	}
+
+	return nil
 }

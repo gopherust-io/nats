@@ -128,6 +128,40 @@ Do **not** request on subjects captured by a JetStream stream—the server PubAc
 
 Presets never invent stream topology.
 
+## vs nats.go
+
+This module is an **opinionated façade over legacy `nats.go` JetStream** (`JetStreamContext`): bind-first consume, presets, codecs, optional [tel](https://github.com/gopherust-io/tel) observability, and ops helpers (`idempotency`, `dlq`, `shadow`, …). Escape hatches: concrete client `Conn()` / `JetStream()`.
+
+It is **not** a faster protocol client. Competitive benches measure **wrapper tax** on the Throughput path against equivalent legacy JetStream calls—not broker throughput.
+
+## Benchmarks
+
+<a id="codec-comparison-benchmarks"></a>
+
+### Codec comparison benchmarks
+
+Internal codec matrix (`make bench-codec`): prefer **Protobuf** / `PublishProto` or raw **`PublishBytes`** on hot paths; JSON is for interoperability. See [docs/performance.md](docs/performance.md).
+
+### Wrapper tax vs legacy nats.go
+
+Same embedded JetStream broker, bytes payload, metrics/tracing off (`ThroughputConfig`), worker pool off. Sample (darwin/arm64, Apple M4 Pro; directional):
+
+| Path | gopherust | nats.go | note |
+|------|----------:|--------:|------|
+| Sync Publish + PubAck | ~71 µs, 36 allocs | ~55 µs, 34 allocs | small wrapper tax |
+| Async Publish + wait | ~51 µs, 42 allocs | ~56 µs, 42 allocs | ≈ parity |
+| Push consume + Ack | ~62 µs, 67 allocs | ~65 µs, 64 allocs | ≈ parity |
+| Pull fetch + Ack | ~112 µs, 105 allocs | ~104 µs, 91 allocs | small tax |
+
+```bash
+make bench-compete
+# system load (external broker):
+go run ./tools/loadtest -impl gopherust -codec bytes -mode push -duration 30s
+go run ./tools/loadtest -impl natsgo   -codec bytes -mode push -duration 30s
+```
+
+Methodology: [docs/benchmarks.md](docs/benchmarks.md) · sample: [benchcmp/results.sample.txt](benchcmp/results.sample.txt) · baselines: [./scripts/bench-baseline.sh](scripts/bench-baseline.sh).
+
 ## Extensions
 
 | Need | Package / API |
@@ -157,6 +191,8 @@ Presets never invent stream topology.
 # Start JetStream (nats-console: make nats-up — or nats-server -js)
 make demo-nats    # ROLE=all|publisher|worker|puller
 make test
+make bench-compete
+make loadtest
 ```
 
 ## Docs
@@ -168,6 +204,7 @@ make test
 | [Recipes](docs/nats/recipes.md) | Production configs |
 | [Push vs pull](docs/nats/push-vs-pull.md) | Delivery model |
 | [Performance](docs/performance.md) | Codecs, AttrCache, throughput |
+| [Benchmarks](docs/benchmarks.md) | Methodology + compete vs nats.go |
 | [Local Docker](docs/nats/local-docker.md) | Compose labs (in nats-console) |
 | [API reference](docs/nats/api-reference.md) | Binding, middleware, presets |
 

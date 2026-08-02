@@ -1,0 +1,9 @@
+.git
+**/*_test.go
+**/testdata
+examples/nats
+tools
+docs
+*.md
+.idea
+.cursor
