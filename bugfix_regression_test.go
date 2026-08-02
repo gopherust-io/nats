@@ -2,6 +2,7 @@ package nats
 
 import (
 	"context"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -116,15 +117,14 @@ func TestPullProcessWithWorkerPool(t *testing.T) {
 	}
 
 	done := make(chan struct{})
-	var n int
+	var n atomic.Int32
 	go func() {
 		pull, pullErr := client.Consumer().Pull(stream, durable)
 		require.NoError(t, pullErr)
 		runCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		defer cancel()
 		_ = pull.Process(runCtx, func(_ context.Context, _ *natspkg.Msg) error {
-			n++
-			if n >= 3 {
+			if n.Add(1) == 3 {
 				close(done)
 			}
 			return nil
