@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.5.0
+
+- Depend on [tel](https://github.com/gopherust-io/tel) **v0.4.0** (pulls [env](https://github.com/gopherust-io/env) **v0.6.0**); goalign **v1.4.0**.
+- Monitoring HTTP client: SSRF-safe dial/redirect checks, response body size cap (`ErrMonitoringBodyTooLarge`), cloned transport.
+- Loadtest / bench tooling updates; competitive benches under `benchcmp/`; docs for performance baselines.
+
 ## v0.4.0
 
 - Depend on [tel](https://github.com/gopherust-io/tel) **v0.3.0** (pulls [env](https://github.com/gopherust-io/env) **v0.5.0**).

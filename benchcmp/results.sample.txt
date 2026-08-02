@@ -1,0 +1,32 @@
+# nats benchcmp sample results
+# go version go1.26.5 darwin/arm64
+# darwin/arm64 — Apple M4 Pro
+# ThroughputConfig, MemoryStorage, metrics/tracing off, worker pool off
+# command: go test ./benchcmp/ -bench=BenchmarkCmp -benchmem -count=1 -benchtime=50x
+#
+{"level":"info","time":"2026-08-02T01:09:51+05:00","caller":"nats.(*client).onConnect:320","message":"NATS connected"}
+goos: darwin
+goarch: arm64
+pkg: github.com/gopherust-io/nats/benchcmp
+cpu: Apple M4 Pro
+BenchmarkCmp_PublishSync/gopherust_PublishBytes-14         	      50	     94772 ns/op	    2453 B/op	      36 allocs/op
+BenchmarkCmp_PublishSync/natsgo_Publish-14                 	      50	     73579 ns/op	    2433 B/op	      34 allocs/op
+{"level":"info","time":"2026-08-02T01:09:51+05:00","caller":"nats.(*client).onConnect:320","message":"NATS connected"}
+{"level":"warn","time":"2026-08-02T01:09:51+05:00","caller":"nats.(*client).onDisconnect:336","message":"NATS disconnected"}
+{"level":"info","time":"2026-08-02T01:09:51+05:00","caller":"nats.(*client).onClosed:392","message":"NATS connection closed"}
+BenchmarkCmp_PublishAsync/gopherust_PublishAsyncBytes-14   	      50	     65709 ns/op	    2851 B/op	      43 allocs/op
+BenchmarkCmp_PublishAsync/natsgo_PublishAsync-14           	      50	     53955 ns/op	    2636 B/op	      40 allocs/op
+{"level":"info","time":"2026-08-02T01:09:51+05:00","caller":"nats.(*client).onConnect:320","message":"NATS connected"}
+BenchmarkCmp_PushConsumeAck/gopherust_QueueSubscribeBound-14         	      50	     77650 ns/op	    4595 B/op	      67 allocs/op
+{"level":"warn","time":"2026-08-02T01:09:51+05:00","caller":"nats.(*client).onDisconnect:336","message":"NATS disconnected"}
+{"level":"info","time":"2026-08-02T01:09:51+05:00","caller":"nats.(*client).onClosed:392","message":"NATS connection closed"}
+{"level":"warn","time":"2026-08-02T01:09:51+05:00","caller":"nats.(*client).onDisconnect:336","message":"NATS disconnected"}
+{"level":"info","time":"2026-08-02T01:09:51+05:00","caller":"nats.(*client).onClosed:392","message":"NATS connection closed"}
+BenchmarkCmp_PushConsumeAck/natsgo_QueueSubscribe-14                 	      50	     93198 ns/op	    4348 B/op	      64 allocs/op
+{"level":"info","time":"2026-08-02T01:09:51+05:00","caller":"nats.(*client).onConnect:320","message":"NATS connected"}
+BenchmarkCmp_PullFetchAck/gopherust_PullFetch-14                     	      50	    128320 ns/op	    6919 B/op	     106 allocs/op
+BenchmarkCmp_PullFetchAck/natsgo_PullSubscribe-14                    	      50	    115267 ns/op	    5676 B/op	      91 allocs/op
+PASS
+{"level":"warn","time":"2026-08-02T01:09:51+05:00","caller":"nats.(*client).onDisconnect:336","message":"NATS disconnected"}
+{"level":"info","time":"2026-08-02T01:09:51+05:00","caller":"nats.(*client).onClosed:392","message":"NATS connection closed"}
+ok  	github.com/gopherust-io/nats/benchcmp	0.973s

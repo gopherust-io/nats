@@ -46,7 +46,7 @@ cfg.Conn.Address = os.Getenv("NATS_URL")
 
 ## Codec selection
 
-See [README codec benchmarks](../README.md#codec-comparison-benchmarks).
+See [README codec benchmarks](../README.md#codec-comparison-benchmarks) and [benchmarks methodology](benchmarks.md).
 
 | Codec | When |
 |-------|------|
@@ -89,7 +89,9 @@ Keep subject cardinality bounded (`METRICS_CARDINALITY_DETECTOR_MAX_CARDINALITY`
 
 ```bash
 ./scripts/bench-baseline.sh
-benchstat bench/baseline.txt <after.txt>
+./scripts/bench-baseline.sh --out bench/after.txt
+benchstat bench/baseline.txt bench/after.txt
+make bench-compete
 ```
 
-Details: [bench/README.md](../bench/README.md) · [Consumer tuning guide](nats/consumer-tuning-guide.md) · [Load test](../tools/loadtest/) · [Production operations](nats/devops.md) (client + server HA / security)
+Details: [benchmarks.md](benchmarks.md) · [bench/README.md](../bench/README.md) · [Consumer tuning guide](nats/consumer-tuning-guide.md) · [Load test](../tools/loadtest/) · [Production operations](nats/devops.md) (client + server HA / security)
