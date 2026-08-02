@@ -38,29 +38,18 @@ const (
 	defaultQueueDepthSampleInterval = 5 * time.Second
 	defaultMetricsCollectInterval   = 15 * time.Second
 	defaultRequestTimeout           = 2 * time.Second
-
-	devInitialRetryAttempts = 1
-	devWorkerPoolSize       = 2
-	devWorkerBufferSize     = 32
-
-	prodWorkerPoolSize      = 8
-	prodWorkerBufferSize    = 256
-	prodWorkerAckWait       = 45 * time.Second
-	prodPendingMsgLimit     = 1000
-	prodPendingMsgBuffer    = 10 << 20 // 10 MiB
-	prodWorkerMaxAckPending = 1000
-	prodFanOutMaxAckPending = 500
 )
 
 type Config struct {
-	PublisherConfig PublisherConfig
-	RequesterConfig RequesterConfig
-	ResponderConfig ResponderConfig
-	Metrics         MetricsConfig
-	RuntimeConsumer RuntimeConsumerConfig
-	Stream          StreamConfig
-	Conn            Connection
-	Backpressure    BackpressureConfig
+	PublisherConfig  PublisherConfig
+	RequesterConfig  RequesterConfig
+	ResponderConfig  ResponderConfig
+	Metrics          MetricsConfig
+	RuntimeConsumer  RuntimeConsumerConfig
+	Stream           StreamConfig
+	Conn             Connection
+	Backpressure     BackpressureConfig
+	AdaptivePressure AdaptivePressureConfig
 }
 
 // ConsumerConfig is an alias kept for backward compatibility.
@@ -150,6 +139,9 @@ type RuntimeConsumerConfig struct {
 	FlowControl       bool
 	AllowMetrics      bool
 	AllowTracing      bool
+	// PayloadDecompression expands Content-Encoding (br/gzip) before the handler
+	// sees msg.Data. DefaultConfig enables this so compressed publishers interoperate.
+	PayloadDecompression bool
 }
 
 // PublisherConfig holds publish metrics and async pending limits.
@@ -163,6 +155,8 @@ type PublisherConfig struct {
 	SkipSubjectValidation bool
 	// MaxAsyncPending caps in-flight PublishAsync requests (0 = defaultMaxAsyncPending, -1 = unlimited).
 	MaxAsyncPending int
+	// PayloadCompression opt-in auto compression (br→gzip) for payloads >32 KiB.
+	PayloadCompression PayloadCompressionMode
 }
 
 // RequesterConfig configures core NATS request/reply client calls.
@@ -176,6 +170,10 @@ type RequesterConfig struct {
 	AllowTracing bool
 	// SkipSubjectValidation skips per-request subject validation for trusted static subjects.
 	SkipSubjectValidation bool
+	// PayloadCompression opt-in compression for outbound requests (>32 KiB, shrink-only).
+	PayloadCompression PayloadCompressionMode
+	// PayloadDecompression expands Content-Encoding on replies before return / Into (default on).
+	PayloadDecompression bool
 }
 
 // ResponderConfig configures core NATS reply subscribers.
@@ -185,6 +183,10 @@ type ResponderConfig struct {
 	MetricPrefix string
 	AllowMetrics bool
 	AllowTracing bool
+	// PayloadCompression opt-in compression for Responder.Respond* replies (>32 KiB, shrink-only).
+	PayloadCompression PayloadCompressionMode
+	// PayloadDecompression expands Content-Encoding on inbound requests before the handler (default on).
+	PayloadDecompression bool
 }
 
 // StreamConfig holds JetStream stream topology fields for explicit provisioning.
@@ -230,11 +232,15 @@ type KeyValueConfig struct {
 //
 // goalign:ignore
 type DurableConsumerConfig struct {
-	OptStartTime      *time.Time
-	Metadata          map[string]string
-	Durable           string
-	FilterSubject     string
-	FilterSubjects    []string
+	OptStartTime   *time.Time
+	Metadata       map[string]string
+	Durable        string
+	FilterSubject  string
+	FilterSubjects []string
+	// DeliverSubject / DeliverGroup preserve push consumers across ResetConsumer.
+	// Empty DeliverSubject means pull.
+	DeliverSubject    string
+	DeliverGroup      string
 	DeliverPolicy     DeliverPolicy
 	ReplayPolicy      ReplayPolicy
 	AckPolicy         AckPolicy
@@ -338,27 +344,33 @@ func DefaultConfig() Config {
 			AllowMetrics: true,
 			AllowTracing: true,
 			MetricPrefix: defaultMetricPrefix,
+			// PayloadCompression stays Off; enable PayloadCompressionAuto explicitly.
 		},
 		RequesterConfig: RequesterConfig{
-			Timeout:      defaultRequestTimeout,
-			AllowMetrics: true,
-			AllowTracing: true,
-			MetricPrefix: defaultMetricPrefix,
+			Timeout:              defaultRequestTimeout,
+			AllowMetrics:         true,
+			AllowTracing:         true,
+			MetricPrefix:         defaultMetricPrefix,
+			PayloadDecompression: true,
+			// PayloadCompression stays Off; enable Auto/Gzip/Brotli explicitly.
 		},
 		ResponderConfig: ResponderConfig{
-			AllowMetrics: true,
-			AllowTracing: true,
-			MetricPrefix: defaultMetricPrefix,
+			AllowMetrics:         true,
+			AllowTracing:         true,
+			MetricPrefix:         defaultMetricPrefix,
+			PayloadDecompression: true,
+			// PayloadCompression stays Off; enable Auto/Gzip/Brotli explicitly.
 		},
 		RuntimeConsumer: RuntimeConsumerConfig{
-			AckWait:          defaultAckWait,
-			IdleHeartbeat:    defaultIdleHeartbeat,
-			FlowControl:      true,
-			WorkerPoolSize:   defaultWorkerPoolSize,
-			WorkerBufferSize: defaultWorkerBufferSize,
-			AllowMetrics:     true,
-			AllowTracing:     true,
-			MetricPrefix:     defaultMetricPrefix,
+			AckWait:              defaultAckWait,
+			IdleHeartbeat:        defaultIdleHeartbeat,
+			FlowControl:          true,
+			WorkerPoolSize:       defaultWorkerPoolSize,
+			WorkerBufferSize:     defaultWorkerBufferSize,
+			AllowMetrics:         true,
+			AllowTracing:         true,
+			MetricPrefix:         defaultMetricPrefix,
+			PayloadDecompression: true,
 		},
 		Backpressure: BackpressureConfig{
 			Mode:                     BackpressureNak,
@@ -372,82 +384,4 @@ func DefaultConfig() Config {
 			CollectInterval: defaultMetricsCollectInterval,
 		},
 	}
-}
-
-// DevConfig returns a minimal local-development configuration.
-func DevConfig() Config {
-	cfg := DefaultConfig()
-	cfg.Conn.AllowReconnect = false
-	cfg.Conn.RetryOnFailedConnect = false
-	cfg.Conn.InitialRetryAttempts = devInitialRetryAttempts
-	cfg.Metrics.AllowMetrics = false
-	cfg.Metrics.AllowTracing = false
-	cfg.Conn.AllowMetrics = false
-	cfg.PublisherConfig.AllowMetrics = false
-	cfg.PublisherConfig.AllowTracing = false
-	cfg.RequesterConfig.AllowMetrics = false
-	cfg.RequesterConfig.AllowTracing = false
-	cfg.ResponderConfig.AllowMetrics = false
-	cfg.ResponderConfig.AllowTracing = false
-	cfg.RuntimeConsumer.AllowMetrics = false
-	cfg.RuntimeConsumer.AllowTracing = false
-	cfg.RuntimeConsumer.WorkerPoolEnabled = true
-	cfg.RuntimeConsumer.WorkerPoolSize = devWorkerPoolSize
-	cfg.RuntimeConsumer.WorkerBufferSize = devWorkerBufferSize
-
-	return cfg
-}
-
-// ProdWorkerConfig returns a production job-queue worker configuration.
-func ProdWorkerConfig() Config {
-	cfg := DefaultConfig()
-	cfg.RuntimeConsumer.WorkerPoolEnabled = true
-	cfg.RuntimeConsumer.WorkerPoolSize = prodWorkerPoolSize
-	cfg.RuntimeConsumer.WorkerBufferSize = prodWorkerBufferSize
-	cfg.RuntimeConsumer.AckWait = prodWorkerAckWait
-	cfg.RuntimeConsumer.PendingMsgLimit = prodPendingMsgLimit
-	cfg.RuntimeConsumer.PendingMsgBuffer = prodPendingMsgBuffer
-	cfg.Backpressure.Mode = BackpressureNak
-	cfg.Backpressure.MaxAckPending = prodWorkerMaxAckPending
-
-	return cfg
-}
-
-// ProdFanOutConfig returns a production event-bus configuration.
-func ProdFanOutConfig() Config {
-	cfg := DefaultConfig()
-	cfg.Backpressure.Mode = BackpressureBlock
-	cfg.Backpressure.MaxAckPending = prodFanOutMaxAckPending
-
-	return cfg
-}
-
-const throughputCollectInterval = 60 * time.Second
-
-// ThroughputConfig returns a job-queue preset tuned for max publish/consume throughput.
-// Observability is minimized; prefer Proto/PublishBytes on the application hot path.
-// ReconnectBufSize stays at the resilient default (16 MiB); set Conn.ReconnectBufSize to -1
-// for fail-fast publishers that must not buffer while disconnected.
-func ThroughputConfig() Config {
-	cfg := ProdWorkerConfig()
-	cfg.PublisherConfig.AllowMetrics = false
-	cfg.PublisherConfig.AllowTracing = false
-	cfg.PublisherConfig.SkipSubjectValidation = true
-	cfg.RequesterConfig.AllowMetrics = false
-	cfg.RequesterConfig.AllowTracing = false
-	cfg.RequesterConfig.SkipSubjectValidation = true
-	cfg.ResponderConfig.AllowMetrics = false
-	cfg.ResponderConfig.AllowTracing = false
-	cfg.RuntimeConsumer.AllowMetrics = false
-	cfg.RuntimeConsumer.AllowTracing = false
-	cfg.Conn.AllowMetrics = false
-	cfg.Metrics.AllowMetrics = false
-	cfg.Metrics.AllowTracing = false
-	cfg.Metrics.CollectInterval = throughputCollectInterval
-	cfg.Metrics.Lite = true
-	cfg.Metrics.FixedCardinality = true
-	cfg.Metrics.TrackedStreams = nil
-	cfg.Metrics.TrackedConsumers = nil
-
-	return cfg
 }

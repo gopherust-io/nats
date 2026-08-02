@@ -110,9 +110,15 @@ func TestValidateAuthConfig(t *testing.T) {
 	require.NoError(t, validateAuthConfig(Connection{Seed: "SXXXX"})) // seed format checked later
 	require.NoError(t, validateAuthConfig(Connection{User: "u", Password: "p"}))
 	require.NoError(t, validateAuthConfig(Connection{Secret: "tok"}))
+	require.NoError(t, validateAuthConfig(Connection{Address: "nats://user:pass@127.0.0.1:4222"})) //nolint:gosec // G101 test fixture URL
 
 	require.ErrorIs(t, validateAuthConfig(Connection{Seed: "s", Secret: "t"}), ErrConflictingAuth)
 	require.ErrorIs(t, validateAuthConfig(Connection{Seed: "s", User: "u", Password: "p"}), ErrConflictingAuth)
+	//nolint:gosec // G101 test fixture URL with userinfo exercises conflicting auth
+	require.ErrorIs(t, validateAuthConfig(Connection{
+		Address: "nats://user:pass@127.0.0.1:4222",
+		Seed:    "s",
+	}), ErrConflictingAuth)
 	require.Error(t, validateAuthConfig(Connection{User: "u"}))
 }
 

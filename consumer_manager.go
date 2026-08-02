@@ -45,6 +45,8 @@ func toNatsConsumerConfig(cfg DurableConsumerConfig) *natspkg.ConsumerConfig {
 		Durable:           cfg.Durable,
 		FilterSubject:     cfg.FilterSubject,
 		FilterSubjects:    cfg.FilterSubjects,
+		DeliverSubject:    cfg.DeliverSubject,
+		DeliverGroup:      cfg.DeliverGroup,
 		ReplayPolicy:      cfg.ReplayPolicy,
 		AckPolicy:         cfg.AckPolicy,
 		MaxDeliver:        cfg.MaxDeliver,
@@ -150,6 +152,14 @@ func (m *consumerManager) AddConsumer(_ context.Context, stream string, cfg *nat
 		if err := ValidateDurableName(cfg.Durable); err != nil {
 			return nil, err
 		}
+	}
+	if !bytesconv.IsEmpty(cfg.FilterSubject) {
+		if err := ValidateSubject(cfg.FilterSubject); err != nil {
+			return nil, err
+		}
+	}
+	if err := ValidateSubjects(cfg.FilterSubjects); err != nil {
+		return nil, err
 	}
 
 	info, err := m.js.AddConsumer(stream, cfg)

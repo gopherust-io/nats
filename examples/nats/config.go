@@ -18,12 +18,16 @@ func ackWaitForHandler(p99 time.Duration) time.Duration {
 }
 
 func buildWorkerConfig() libnats.Config {
-	cfg := libnats.ProdWorkerConfig()
+	cfg := libnats.DefaultConfig()
 
 	cfg.Conn.Address = envOr("NATS_URL", "nats://127.0.0.1:4222")
 	cfg.Conn.ClientName = clientName("worker")
 
 	cfg.RuntimeConsumer.WorkerPoolEnabled = true
+	cfg.RuntimeConsumer.WorkerPoolSize = 8
+	cfg.RuntimeConsumer.WorkerBufferSize = 256
+	cfg.RuntimeConsumer.PendingMsgLimit = 1000
+	cfg.RuntimeConsumer.PendingMsgBuffer = 10 << 20
 	ackWait := ackWaitForHandler(handlerP99)
 	cfg.RuntimeConsumer.AckWait = ackWait
 	cfg.RuntimeConsumer.IdleHeartbeat = 0

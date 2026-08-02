@@ -9,8 +9,10 @@ import (
 	"time"
 
 	natspkg "github.com/nats-io/nats.go"
+	"github.com/rs/zerolog"
 
 	"github.com/gopherust-io/nats/internal/bytesconv"
+	"github.com/gopherust-io/nats/workerpool"
 )
 
 type PullConsumer interface {
@@ -71,6 +73,7 @@ type pullConsumer struct {
 	sub     *natspkg.Subscription
 	metrics *clientMetrics
 	parent  *consumer
+	mu      sync.Mutex
 }
 
 func (c *consumer) Pull(stream, durable string) (PullConsumer, error) {
@@ -96,7 +99,7 @@ func (c *consumer) Pull(stream, durable string) (PullConsumer, error) {
 		subject := consumerFilterSubject(info.Config)
 		sub, err = c.js.PullSubscribe(subject, durable, natspkg.BindStream(stream))
 	} else {
-		sub, err = c.js.PullSubscribe(stream, "")
+		sub, err = c.js.PullSubscribe(">", "", natspkg.BindStream(stream))
 	}
 
 	if err != nil {
@@ -108,12 +111,27 @@ func (c *consumer) Pull(stream, durable string) (PullConsumer, error) {
 
 // Close unsubscribes the underlying pull subscription.
 func (p *pullConsumer) Close() error {
-	if p == nil || p.sub == nil {
+	if p == nil {
+		return nil
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.sub == nil {
 		return nil
 	}
 	err := p.sub.Unsubscribe()
 	p.sub = nil
 	return err
+}
+
+func (p *pullConsumer) subscription() (*natspkg.Subscription, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.sub == nil {
+		return nil, fmt.Errorf("pull: subscription closed")
+	}
+
+	return p.sub, nil
 }
 
 func (p *pullConsumer) Fetch(ctx context.Context, batch int, opts ...FetchOpt) ([]*natspkg.Msg, error) {
@@ -145,9 +163,14 @@ func (p *pullConsumer) Fetch(ctx context.Context, batch int, opts ...FetchOpt) (
 		}
 	}
 
+	sub, subErr := p.subscription()
+	if subErr != nil {
+		return nil, subErr
+	}
+
 	start := time.Now()
 
-	messages, err := p.sub.Fetch(batch, fetchOpts...)
+	messages, err := sub.Fetch(batch, fetchOpts...)
 	if p.metrics != nil {
 		if p.metrics.fetchWaitTime != nil {
 			p.metrics.fetchWaitTime.Record(ctx, time.Since(start).Seconds())
@@ -170,7 +193,11 @@ func (p *pullConsumer) Fetch(ctx context.Context, batch int, opts ...FetchOpt) (
 }
 
 func (p *pullConsumer) FetchNoWait(batch int) ([]*natspkg.Msg, error) {
-	messages, err := p.sub.Fetch(batch, natspkg.MaxWait(0))
+	sub, subErr := p.subscription()
+	if subErr != nil {
+		return nil, subErr
+	}
+	messages, err := sub.Fetch(batch, natspkg.MaxWait(0))
 	if err != nil {
 		return messages, fmt.Errorf("pull fetch no-wait batch=%d: %w", batch, err)
 	}
@@ -208,7 +235,25 @@ func (p *pullConsumer) Process(ctx context.Context, handler MsgHandler, opts ...
 			fetchOpts = append(fetchOpts, WithFetchHeartbeat(cfg.heartbeat))
 		}
 
-		messages, err := p.Fetch(ctx, cfg.batch, fetchOpts...)
+		fetchBatch := cfg.batch
+		if p.parent != nil && p.parent.adaptive != nil {
+			depth, poolCap := 0, 0
+			if p.parent.workerPool != nil {
+				depth = p.parent.workerPool.QueueDepth()
+				poolCap = p.parent.cfg.WorkerBufferSize
+			}
+			decision := p.parent.adaptive.Observe(AdaptivePressureInput{
+				PoolDepth:     depth,
+				PoolCapacity:  poolCap,
+				CurrentBatch:  fetchBatch,
+				MaxAckPending: p.parent.backpressure.MaxAckPending,
+			})
+			if decision.FetchBatch > 0 {
+				fetchBatch = decision.FetchBatch
+			}
+		}
+
+		messages, err := p.Fetch(ctx, fetchBatch, fetchOpts...)
 		if err != nil {
 			if errors.Is(err, natspkg.ErrTimeout) ||
 				errors.Is(err, natspkg.ErrNoHeartbeat) ||
@@ -219,8 +264,15 @@ func (p *pullConsumer) Process(ctx context.Context, handler MsgHandler, opts ...
 			return fmt.Errorf("pull process fetch: %w", err)
 		}
 
+		// Per-message handler errors are Nak'd inside processMessage; keep fetching.
 		if err := p.processBatch(ctx, messages, handler, cfg); err != nil {
-			return err
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				return err
+			}
+			if errors.Is(err, workerpool.ErrPoolStopped) {
+				return err
+			}
+			zerolog.Ctx(ctx).Error().Err(err).Msg("pull process batch error; continuing")
 		}
 	}
 }
@@ -234,6 +286,7 @@ func (p *pullConsumer) processBatch(ctx context.Context, messages []*natspkg.Msg
 
 	if p.parent != nil && p.parent.cfg.WorkerPoolEnabled {
 		if err := p.processBatchWithPool(ctx, messages, handler); err != nil {
+			nakRemaining(messages)
 			return err
 		}
 	} else if cfg.concurrency > 1 {
@@ -241,9 +294,14 @@ func (p *pullConsumer) processBatch(ctx context.Context, messages []*natspkg.Msg
 			return err
 		}
 	} else {
-		for _, msg := range messages {
+		for i, msg := range messages {
+			if ctx.Err() != nil {
+				nakRemaining(messages[i:])
+				return fmt.Errorf("pull process: %w", ctx.Err())
+			}
 			if err := p.parent.processMessage(ctx, msg, handler); err != nil {
-				return fmt.Errorf("pull process subject=%q: %w", msg.Subject, err)
+				// Message already Nak'd; continue remaining of the batch.
+				zerolog.Ctx(ctx).Error().Err(err).Str("subject", msg.Subject).Msg("pull process message")
 			}
 		}
 	}
@@ -255,8 +313,20 @@ func (p *pullConsumer) processBatch(ctx context.Context, messages []*natspkg.Msg
 	return nil
 }
 
+func nakRemaining(messages []*natspkg.Msg) {
+	for _, msg := range messages {
+		if msg == nil {
+			continue
+		}
+		if err := msg.Nak(); err != nil && !errors.Is(err, natspkg.ErrMsgAlreadyAckd) {
+			// best-effort
+			_ = err
+		}
+	}
+}
+
 func (p *pullConsumer) processBatchWithPool(ctx context.Context, messages []*natspkg.Msg, handler MsgHandler) error {
-	p.parent.initWorkerPool(ctx, handler)
+	p.parent.initWorkerPool()
 
 	var wg sync.WaitGroup
 	var errMu sync.Mutex
@@ -273,65 +343,69 @@ func (p *pullConsumer) processBatchWithPool(ctx context.Context, messages []*nat
 		errMu.Unlock()
 	}
 
-	for _, msg := range messages {
-		if ctx.Err() != nil {
-			return fmt.Errorf("pull process: %w", ctx.Err())
-		}
-
+	enqueue := func(msg *natspkg.Msg) error {
 		wg.Add(1)
-		msg := msg
-
 		accepted, err := p.parent.workerPool.TryPublishNonBlocking(ctx, msg, true, func(msgCtx context.Context, m *natspkg.Msg) error {
 			defer wg.Done()
 
-			if err := p.parent.processMessage(msgCtx, m, handler); err != nil {
-				recordErr(err)
+			if procErr := p.parent.processMessage(msgCtx, m, handler); procErr != nil {
+				recordErr(procErr)
 
-				return err
+				return procErr
 			}
 
 			return nil
 		})
 		if err != nil {
 			wg.Done()
+
 			return err
 		}
-		if !accepted {
-			wg.Done()
+		if accepted {
+			return nil
+		}
+		wg.Done()
 
-			bpErr := p.parent.handlePoolBackpressure(ctx, msg)
-			switch {
-			case bpErr == nil:
-				wg.Add(1)
-				p.parent.workerPool.Publish(ctx, msg, true, func(msgCtx context.Context, m *natspkg.Msg) error {
-					defer wg.Done()
+		bpErr := p.parent.handlePoolBackpressure(ctx, msg)
+		switch {
+		case bpErr == nil, errors.Is(bpErr, ErrPoolFull):
+			wg.Add(1)
+			if pubErr := p.parent.workerPool.TryPublish(ctx, msg, true, func(msgCtx context.Context, m *natspkg.Msg) error {
+				defer wg.Done()
 
-					if err := p.parent.processMessage(msgCtx, m, handler); err != nil {
-						recordErr(err)
+				if procErr := p.parent.processMessage(msgCtx, m, handler); procErr != nil {
+					recordErr(procErr)
 
-						return err
-					}
+					return procErr
+				}
 
-					return nil
-				})
-			case errors.Is(bpErr, ErrPoolFull):
-				wg.Add(1)
-				p.parent.workerPool.Publish(ctx, msg, true, func(msgCtx context.Context, m *natspkg.Msg) error {
-					defer wg.Done()
+				return nil
+			}); pubErr != nil {
+				wg.Done()
+				recordErr(pubErr)
 
-					if err := p.parent.processMessage(msgCtx, m, handler); err != nil {
-						recordErr(err)
-
-						return err
-					}
-
-					return nil
-				})
-			case errors.Is(bpErr, ErrBackpressureHandled):
-				continue
-			default:
-				return bpErr
+				return pubErr
 			}
+
+			return nil
+		case errors.Is(bpErr, ErrBackpressureHandled):
+			return nil
+		default:
+			return bpErr
+		}
+	}
+
+	for _, msg := range messages {
+		if ctx.Err() != nil {
+			recordErr(fmt.Errorf("pull process: %w", ctx.Err()))
+
+			break
+		}
+
+		if err := enqueue(msg); err != nil {
+			recordErr(err)
+
+			break
 		}
 	}
 
@@ -381,6 +455,7 @@ func (p *pullConsumer) processBatchConcurrent(ctx context.Context, messages []*n
 		for msg := range jobs {
 			if ctx.Err() != nil {
 				recordErr(ctx.Err())
+				_ = msg.Nak()
 
 				continue
 			}
@@ -403,11 +478,12 @@ func (p *pullConsumer) processBatchConcurrent(ctx context.Context, messages []*n
 		go worker()
 	}
 
-	for _, msg := range messages {
+	for i, msg := range messages {
 		errMu.Lock()
 		hasErr := firstErr != nil
 		errMu.Unlock()
 		if hasErr || ctx.Err() != nil {
+			nakRemaining(messages[i:])
 			break
 		}
 		jobs <- msg
@@ -415,10 +491,7 @@ func (p *pullConsumer) processBatchConcurrent(ctx context.Context, messages []*n
 	close(jobs)
 	wg.Wait()
 
-	if firstErr != nil {
-		return firstErr
-	}
-
+	// Per-message errors are already Nak'd; do not fail the whole Process loop.
 	if ctx.Err() != nil {
 		return fmt.Errorf("pull process: %w", ctx.Err())
 	}

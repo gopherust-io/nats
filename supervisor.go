@@ -135,9 +135,21 @@ func (s *supervisedSubscription) loop(ctx context.Context, subscribe SubscribeFn
 	backoff := s.cfg.InitialBackoff
 	healthyStreak := 0
 
+	cleanupSub := func() {
+		s.mu.Lock()
+		sub := s.sub
+		s.sub = nil
+		s.mu.Unlock()
+		if sub != nil {
+			_ = sub.Unsubscribe()
+		}
+	}
+
 	for {
 		select {
 		case <-ctx.Done():
+			cleanupSub()
+
 			return
 		case <-s.stopCh:
 			return
@@ -184,6 +196,7 @@ func (s *supervisedSubscription) loop(ctx context.Context, subscribe SubscribeFn
 				if s.metrics != nil && s.metrics.supervisorGiveUp != nil {
 					s.metrics.supervisorGiveUp.Add(ctx, 1)
 				}
+				cleanupSub()
 
 				return
 			}
@@ -192,6 +205,8 @@ func (s *supervisedSubscription) loop(ctx context.Context, subscribe SubscribeFn
 
 			select {
 			case <-ctx.Done():
+				cleanupSub()
+
 				return
 			case <-s.stopCh:
 				return

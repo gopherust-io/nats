@@ -11,7 +11,7 @@ import (
 )
 
 // consumerFilterSubject resolves the pull-subscribe subject from consumer config.
-// When multiple filter subjects share a prefix, a wildcard subject is derived.
+// When multiple filter subjects share a token prefix, a wildcard subject is derived.
 func consumerFilterSubject(cfg natspkg.ConsumerConfig) string {
 	if !bytesconv.IsEmpty(cfg.FilterSubject) {
 		return cfg.FilterSubject
@@ -34,43 +34,63 @@ func consumerFilterSubjects(subjects []string) string {
 		zerolog.Ctx(context.Background()).Warn().
 			Any("filter_subjects", subjects).
 			Str("selected", subjects[0]).
-			Msg("pull consumer filter subjects share no common prefix; using first filter only")
+			Msg("pull consumer filter subjects share no common token prefix; using first filter only")
 
 		return subjects[0]
 	}
 }
 
+// commonWildcardSubject returns a token-aware wildcard covering all subjects, or "".
+// "orders.created"+"orders.updated" → "orders.>"; "shared"+"sharedx" → "" (not "shared.>").
 func commonWildcardSubject(subjects []string) string {
 	if len(subjects) == 0 {
 		return ""
 	}
 
-	prefix := subjects[0]
-	for _, s := range subjects[1:] {
-		prefix = commonPrefix(prefix, s)
-		if bytesconv.IsEmpty(prefix) {
-			return ""
+	tokens := make([][]string, len(subjects))
+	minLen := -1
+	for i, s := range subjects {
+		tokens[i] = strings.Split(s, ".")
+		if minLen < 0 || len(tokens[i]) < minLen {
+			minLen = len(tokens[i])
 		}
 	}
-
-	if i := strings.LastIndex(prefix, "."); i >= 0 {
-		return prefix[:i+1] + ">"
+	if minLen <= 0 {
+		return ""
 	}
 
-	if !bytesconv.IsEmpty(prefix) && !strings.HasSuffix(prefix, ">") {
-		return prefix + ".>"
+	common := 0
+	for i := range minLen {
+		tok := tokens[0][i]
+		match := true
+		for _, t := range tokens[1:] {
+			if t[i] != tok {
+				match = false
+
+				break
+			}
+		}
+		if !match {
+			break
+		}
+		common++
+	}
+	if common == 0 {
+		return ""
 	}
 
-	return prefix
-}
+	prefix := strings.Join(tokens[0][:common], ".")
+	allExact := true
+	for _, t := range tokens {
+		if len(t) != common {
+			allExact = false
 
-func commonPrefix(first, second string) string {
-	n := min(len(second), len(first))
-
-	i := 0
-	for i < n && first[i] == second[i] {
-		i++
+			break
+		}
+	}
+	if allExact {
+		return prefix
 	}
 
-	return first[:i]
+	return prefix + ".>"
 }

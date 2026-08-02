@@ -7,7 +7,7 @@ NPROCS := $(shell getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu 2>/
 GO_TEST_FLAGS := -count=1 -parallel=$(NPROCS) -timeout=60s
 COVERAGE_MIN ?= 75
 
-.PHONY: help test test-race coverage coverage-html bench bench-codec bench-compete fuzz ci vet fmt fmt-check lint lint-fix govulncheck align align-fix examples \
+.PHONY: help test test-race coverage coverage-html bench bench-codec bench-payload bench-compete fuzz ci vet fmt fmt-check lint lint-fix govulncheck align align-fix examples \
 	loadtest demo demo-nats dev
 
 GOLANGCI_LINT := go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2
@@ -29,6 +29,7 @@ help:
 	@echo "  coverage-html     Open HTML coverage report (requires coverage.out)"
 	@echo "  bench             Run all benchmarks"
 	@echo "  bench-codec       Run BenchmarkCodecComparison only"
+	@echo "  bench-payload     Pure + pub/sub + request-reply compress matrices"
 	@echo "  bench-compete     Wrapper tax vs legacy nats.go JetStream"
 	@echo "  fuzz              Fuzz smoke (15s)"
 	@echo "  ci                fmt-check + unit tests + race detector + vet + lint"
@@ -82,6 +83,9 @@ bench:
 
 bench-codec:
 	go test -bench=BenchmarkCodecComparison -benchmem ./... -run '^$$'
+
+bench-payload:
+	go test -bench='BenchmarkPayload|BenchmarkPubSubPayload|BenchmarkRequestReplyPayload' -benchmem -count=1 . -run '^$$'
 
 bench-compete:
 	go test -bench=BenchmarkCmp -benchmem -count=1 -benchtime=100x ./benchcmp/ -run '^$$'

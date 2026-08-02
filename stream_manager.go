@@ -74,10 +74,6 @@ func toNatsStreamConfig(cfg StreamConfig) *natspkg.StreamConfig {
 		sc.Sources = cfg.Sources
 	}
 
-	if sc.Replicas == 0 {
-		sc.Replicas = defaultStreamReplicas
-	}
-
 	return sc
 }
 
@@ -91,13 +87,27 @@ func (s *streamManager) CreateOrUpdateStream(_ context.Context, cfg StreamConfig
 	}
 
 	sc := toNatsStreamConfig(cfg)
+	if sc.Replicas == 0 {
+		sc.Replicas = defaultStreamReplicas
+	}
 
 	info, addErr := s.js.AddStream(sc)
 	if addErr == nil {
 		return info, nil
 	}
 
-	info, updateErr := s.js.UpdateStream(sc)
+	// On update, preserve existing replica count when caller left Replicas unset.
+	updateCfg := toNatsStreamConfig(cfg)
+	if cfg.Replicas == 0 {
+		if existing, infoErr := s.js.StreamInfo(cfg.Name); infoErr == nil && existing != nil {
+			updateCfg.Replicas = existing.Config.Replicas
+		}
+	}
+	if updateCfg.Replicas == 0 {
+		updateCfg.Replicas = defaultStreamReplicas
+	}
+
+	info, updateErr := s.js.UpdateStream(updateCfg)
 	if updateErr != nil {
 		return nil, fmt.Errorf("create or update stream %q: add: %w; update: %w", cfg.Name, addErr, updateErr)
 	}
@@ -111,6 +121,9 @@ func (s *streamManager) AddStream(_ context.Context, cfg *natspkg.StreamConfig) 
 	}
 
 	if err := ValidateStreamName(cfg.Name); err != nil {
+		return nil, err
+	}
+	if err := ValidateSubjects(cfg.Subjects); err != nil {
 		return nil, err
 	}
 

@@ -13,7 +13,7 @@ import (
 )
 
 func TestNewConsumerDefaults(t *testing.T) {
-	c := newConsumer(context.Background(), RuntimeConsumerConfig{}, BackpressureConfig{}, nil, nil, false)
+	c := newConsumer(context.Background(), RuntimeConsumerConfig{}, BackpressureConfig{}, nil, nil, false, AdaptivePressureConfig{})
 	require.NotNil(t, c)
 	assert.Equal(t, 30*time.Second, c.cfg.AckWait)
 }
@@ -23,7 +23,7 @@ func TestAppendConsumerOpts(t *testing.T) {
 		AckWait:       10 * time.Second,
 		IdleHeartbeat: time.Second,
 		FlowControl:   true,
-	}, BackpressureConfig{}, nil, nil, false)
+	}, BackpressureConfig{}, nil, nil, false, AdaptivePressureConfig{})
 
 	opts := c.appendConsumerOpts(nil, false)
 	require.NotEmpty(t, opts)
@@ -38,7 +38,7 @@ func TestAppendConsumerOptsSkipsHeartbeatWhenDisabled(t *testing.T) {
 	c := newConsumer(context.Background(), RuntimeConsumerConfig{
 		AckWait:       10 * time.Second,
 		IdleHeartbeat: 0,
-	}, BackpressureConfig{}, nil, nil, false)
+	}, BackpressureConfig{}, nil, nil, false, AdaptivePressureConfig{})
 	opts := c.appendConsumerOpts(nil, false)
 	queueOpts := c.appendConsumerOpts(nil, true)
 	assert.Equal(t, len(opts), len(queueOpts))
@@ -85,7 +85,13 @@ func TestToNatsConsumerConfigAckDefault(t *testing.T) {
 }
 
 func TestWrapHandlerDirectPath(t *testing.T) {
-	c := newConsumer(context.Background(), RuntimeConsumerConfig{WorkerPoolEnabled: false}, BackpressureConfig{}, nil, nil, false)
+	c := newConsumer(
+		context.Background(),
+		RuntimeConsumerConfig{WorkerPoolEnabled: false},
+		BackpressureConfig{},
+		nil, nil, false,
+		AdaptivePressureConfig{},
+	)
 	wrapped := c.wrapHandler(context.Background(), func(_ context.Context, _ *natspkg.Msg) error {
 		return nil
 	})

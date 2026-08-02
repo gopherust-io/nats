@@ -114,7 +114,13 @@ func (m *monitoringClient) Fetch(ctx context.Context, baseURL, path string) ([]b
 	}
 
 	if resp.StatusCode >= http.StatusBadRequest {
-		return nil, fmt.Errorf("monitoring %s: status %d: %s", path, resp.StatusCode, bytesconv.BytesToString(body))
+		snippet := body
+		const maxErrBody = 256
+		if len(snippet) > maxErrBody {
+			snippet = snippet[:maxErrBody]
+		}
+
+		return nil, fmt.Errorf("monitoring %s: status %d: %s", path, resp.StatusCode, bytesconv.BytesToString(snippet))
 	}
 
 	return body, nil
@@ -151,7 +157,22 @@ func dialMonitoringContext(ctx context.Context, network, addr string) (net.Conn,
 }
 
 func isBlockedMonitoringIP(ip net.IP) bool {
-	return ip == nil || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified()
+	if ip == nil || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() {
+		return true
+	}
+	// Cloud metadata / IMDS addresses beyond link-local.
+	if ip4 := ip.To4(); ip4 != nil {
+		// Alibaba cloud metadata
+		if ip4[0] == 100 && ip4[1] == 100 && ip4[2] == 100 && ip4[3] == 200 {
+			return true
+		}
+	}
+	// AWS IMDS IPv6
+	if ip.Equal(net.ParseIP("fd00:ec2::254")) {
+		return true
+	}
+
+	return false
 }
 
 // validateMonitoringFetchURL blocks link-local / cloud-metadata targets after
@@ -170,7 +191,7 @@ func validateMonitoringFetchURL(ctx context.Context, fetchURL *url.URL) error {
 		return errors.New("monitoring url host not allowed")
 	}
 	switch host {
-	case "metadata.google.internal", "metadata.goog":
+	case "metadata.google.internal", "metadata.goog", "instance-data":
 		return errors.New("monitoring url host not allowed")
 	}
 	if ip := net.ParseIP(host); ip != nil {

@@ -48,7 +48,9 @@ type consumer struct {
 	handledListeners  atomic.Pointer[[]func(time.Duration)]
 	cfg               RuntimeConsumerConfig
 	backpressure      BackpressureConfig
+	adaptive          *AdaptivePressure
 	poolOnce          sync.Once
+	stopOnce          sync.Once
 	allowTracing      bool
 }
 
@@ -126,6 +128,7 @@ func newConsumer(
 	js natspkg.JetStreamContext,
 	metrics *clientMetrics,
 	allowTracing bool,
+	adaptive AdaptivePressureConfig,
 ) *consumer {
 	c := &consumer{
 		cfg:          cfg,
@@ -133,6 +136,9 @@ func newConsumer(
 		js:           js,
 		metrics:      metrics,
 		allowTracing: allowTracing && cfg.AllowTracing,
+	}
+	if adaptive.Enabled {
+		c.adaptive = NewAdaptivePressure(adaptive)
 	}
 	c.ctx, c.cancel = context.WithCancel(ctx)
 
@@ -148,7 +154,8 @@ func newConsumer(
 }
 
 func (c *consumer) startQueueDepthSampler(interval time.Duration) {
-	c.depthTicker = time.NewTicker(interval)
+	ticker := time.NewTicker(interval)
+	c.depthTicker = ticker
 	c.depthStop = make(chan struct{})
 
 	go func() {
@@ -156,7 +163,7 @@ func (c *consumer) startQueueDepthSampler(interval time.Duration) {
 			select {
 			case <-c.depthStop:
 				return
-			case <-c.depthTicker.C:
+			case <-ticker.C:
 				if c.workerPool != nil && c.metrics != nil && c.metrics.workerQueueDepth != nil {
 					c.metrics.workerQueueDepth.Record(c.ctx, int64(c.workerPool.QueueDepth()))
 				}
@@ -302,7 +309,7 @@ func subWrap(ctx context.Context, handler MsgHandler) natspkg.MsgHandler {
 	}
 }
 
-func (c *consumer) initWorkerPool(ctx context.Context, handler MsgHandler) {
+func (c *consumer) initWorkerPool() {
 	c.poolOnce.Do(func() {
 		size := c.cfg.WorkerPoolSize
 		if size <= 0 {
@@ -310,22 +317,29 @@ func (c *consumer) initWorkerPool(ctx context.Context, handler MsgHandler) {
 		}
 
 		buf := c.cfg.WorkerBufferSize
-		c.workerPool = workerpool.New(ctx, size, buf, func(msgCtx context.Context, msg *natspkg.Msg) error {
-			return c.processMessage(msgCtx, msg, handler)
-		})
+		// Per-message processFn is always supplied (applyFn=true); registerFn is unused.
+		poolCtx := c.ctx
+		if poolCtx == nil {
+			poolCtx = context.Background()
+		}
+		c.workerPool = workerpool.New(poolCtx, size, buf, nil)
 		c.workerPool.Consume()
 	})
 }
 
-func (c *consumer) wrapHandler(ctx context.Context, handler MsgHandler) MsgHandler {
+func (c *consumer) wrapHandler(_ context.Context, handler MsgHandler) MsgHandler {
 	if !c.cfg.WorkerPoolEnabled {
 		return func(msgCtx context.Context, msg *natspkg.Msg) error {
 			return c.processMessage(msgCtx, msg, handler)
 		}
 	}
 
+	processFn := func(msgCtx context.Context, msg *natspkg.Msg) error {
+		return c.processMessage(msgCtx, msg, handler)
+	}
+
 	return func(msgCtx context.Context, msg *natspkg.Msg) error {
-		c.initWorkerPool(ctx, handler)
+		c.initWorkerPool()
 
 		mode := c.backpressure.Mode
 		if mode == 0 {
@@ -333,7 +347,7 @@ func (c *consumer) wrapHandler(ctx context.Context, handler MsgHandler) MsgHandl
 		}
 
 		if mode == BackpressureNak {
-			accepted, err := c.workerPool.TryPublishNonBlocking(msgCtx, msg, false, nil)
+			accepted, err := c.workerPool.TryPublishNonBlocking(msgCtx, msg, true, processFn)
 			if err != nil {
 				return err
 			}
@@ -354,7 +368,9 @@ func (c *consumer) wrapHandler(ctx context.Context, handler MsgHandler) MsgHandl
 			return err
 		}
 
-		c.workerPool.Publish(msgCtx, msg, false, nil)
+		if pubErr := c.workerPool.TryPublish(msgCtx, msg, true, processFn); pubErr != nil {
+			return pubErr
+		}
 
 		return nil
 	}
@@ -377,6 +393,15 @@ func (c *consumer) processMessage(ctx context.Context, msg *natspkg.Msg, handler
 	start := c.recordMessageMetrics(spanCtx, msg, meta)
 	if start == 0 {
 		start = time.Now().UnixNano()
+	}
+
+	if c.cfg.PayloadDecompression {
+		if derr := maybeDecompressMsg(msg); derr != nil {
+			handlerErr = derr
+			c.recordProcessError(spanCtx, subject, msg, derr)
+
+			return fmt.Errorf("message decompression failed subject=%q: %w", subject, derr)
+		}
 	}
 
 	err := invokeMsgHandler(spanCtx, msg, handler)
@@ -406,6 +431,12 @@ func (c *consumer) processMessage(ctx context.Context, msg *natspkg.Msg, handler
 
 	ackErr := msg.Ack()
 	if ackErr != nil {
+		// Handler may have already Ack/Nak/Term'd; treat as settled success.
+		if errors.Is(ackErr, natspkg.ErrMsgAlreadyAckd) {
+			c.notifyProcessSuccess()
+
+			return nil
+		}
 		zerolog.Ctx(ctx).Error().Err(ackErr).Msg("ack message")
 
 		return fmt.Errorf("ack message subject=%q: %w", subject, ackErr)
@@ -441,7 +472,7 @@ func (c *consumer) recordProcessError(ctx context.Context, subject string, msg *
 		Msg("process message")
 
 	nakErr := msg.Nak()
-	if nakErr != nil {
+	if nakErr != nil && !errors.Is(nakErr, natspkg.ErrMsgAlreadyAckd) {
 		zerolog.Ctx(ctx).Error().Err(nakErr).Msg("nak message")
 	}
 }
@@ -458,7 +489,7 @@ func (c *consumer) recordMessageMetrics(ctx context.Context, msg *natspkg.Msg, m
 
 	subject := c.metricSubject(msg.Subject)
 	if c.metrics.redeliveryTotal != nil && meta != nil && meta.NumDelivered > 1 {
-		c.metrics.redeliveryTotal.AddWith(ctx, int64(meta.NumDelivered-1), subject)
+		c.metrics.redeliveryTotal.AddWith(ctx, 1, subject)
 	}
 
 	if c.metrics.messageBytes != nil {
@@ -473,18 +504,23 @@ func (c *consumer) recordMessageMetrics(ctx context.Context, msg *natspkg.Msg, m
 }
 
 func (c *consumer) stop() {
-	if c.depthTicker != nil {
-		close(c.depthStop)
-		c.depthTicker.Stop()
-	}
+	c.stopOnce.Do(func() {
+		if c.depthStop != nil {
+			close(c.depthStop)
+		}
+		if c.depthTicker != nil {
+			c.depthTicker.Stop()
+		}
 
-	if c.workerPool != nil {
-		c.workerPool.GracefulStop()
-	}
+		if c.workerPool != nil {
+			c.workerPool.GracefulStop()
+		}
 
-	if c.cancel != nil {
-		c.cancel()
-	}
+		if c.cancel != nil {
+			c.cancel()
+			c.cancel = nil
+		}
+	})
 }
 
 type subscription struct {

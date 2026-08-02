@@ -29,6 +29,12 @@ func TestDefaultConfig(t *testing.T) {
 	assert.True(t, cfg.RuntimeConsumer.FlowControl)
 	assert.Equal(t, defaultWorkerPoolSize, cfg.RuntimeConsumer.WorkerPoolSize)
 	assert.Equal(t, defaultWorkerBufferSize, cfg.RuntimeConsumer.WorkerBufferSize)
+	assert.True(t, cfg.RuntimeConsumer.PayloadDecompression)
+	assert.Equal(t, PayloadCompressionOff, cfg.PublisherConfig.PayloadCompression)
+	assert.Equal(t, PayloadCompressionOff, cfg.RequesterConfig.PayloadCompression)
+	assert.True(t, cfg.RequesterConfig.PayloadDecompression)
+	assert.Equal(t, PayloadCompressionOff, cfg.ResponderConfig.PayloadCompression)
+	assert.True(t, cfg.ResponderConfig.PayloadDecompression)
 	assert.Equal(t, BackpressureNak, cfg.Backpressure.Mode)
 	assert.Equal(t, defaultMaxAckPending, cfg.Backpressure.MaxAckPending)
 	assert.Equal(t, defaultQueueDepthSampleInterval, cfg.Backpressure.QueueDepthSampleInterval)
@@ -37,8 +43,11 @@ func TestDefaultConfig(t *testing.T) {
 	assert.Equal(t, defaultMetricsCollectInterval, cfg.Metrics.CollectInterval)
 }
 
-// ExampleDevConfig shows a minimal local development NATS configuration.
-func ExampleDevConfig() {
-	cfg := DevConfig()
-	_ = cfg.Stream.Name
+// ExampleDefaultConfig shows starting from DefaultConfig and applying job-worker knobs.
+func ExampleDefaultConfig() {
+	cfg := DefaultConfig()
+	cfg.RuntimeConsumer.WorkerPoolEnabled = true
+	cfg.RuntimeConsumer.WorkerPoolSize = 8
+	cfg.RuntimeConsumer.WorkerBufferSize = 256
+	_ = cfg.Conn.Address
 }

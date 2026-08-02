@@ -38,7 +38,7 @@ go run ./tools/loadtest -mode pull -batch 100 -workers 8 -codec bytes -duration 
 | `-mode` | `push` | `push` or `pull` |
 | `-workers` | `4` | Pool / pull concurrency |
 | `-batch` | `50` | Pull fetch batch |
-| `-metrics` | `false` | Use ProdWorkerConfig vs ThroughputConfig (gopherust) |
+| `-metrics` | `false` | Job-worker knobs with metrics on vs max-QPS (metrics off) for gopherust |
 | `-rate` | `500` | Target publish rate |
 
 See also [docs/performance.md](../../docs/performance.md).

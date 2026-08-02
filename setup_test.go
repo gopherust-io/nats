@@ -39,13 +39,18 @@ func TestSetupWorkerIntegration(t *testing.T) {
 	prefix := streamSubjectPrefix(stream)
 	subscribeSubject := prefix + ">"
 	publishSubject := prefix + "events"
+	durable := uniqueDurable(t, "setup-worker")
 	received := make(chan struct{}, 1)
 
 	_, err := client.SetupWorker(ctx, WorkerSetup{
 		Stream: StreamConfig{Name: stream, Subjects: []string{subscribeSubject}, Replicas: 1},
 		Consumer: DurableConsumerConfig{
-			Durable:       uniqueDurable(t, "setup-worker"),
+			Durable:       durable,
 			FilterSubject: subscribeSubject,
+			MaxAckPending: 42,
+			AckWait:       15 * time.Second,
+			MaxDeliver:    7,
+			Metadata:      map[string]string{"role": "setup"},
 		},
 		Queue:   uniqueQueue(t, "setup-workers"),
 		Subject: subscribeSubject,
@@ -57,6 +62,13 @@ func TestSetupWorkerIntegration(t *testing.T) {
 		return nil
 	})
 	require.NoError(t, err)
+
+	info, err := client.Consumers().ConsumerInfo(ctx, stream, durable)
+	require.NoError(t, err)
+	require.Equal(t, 42, info.Config.MaxAckPending)
+	require.Equal(t, 15*time.Second, info.Config.AckWait)
+	require.Equal(t, 7, info.Config.MaxDeliver)
+	require.Equal(t, "setup", info.Config.Metadata["role"])
 
 	require.NoError(t, client.Publisher().PublishJSON(ctx, publishSubject, map[string]string{"id": "1"}))
 

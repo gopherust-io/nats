@@ -32,7 +32,7 @@ Then in this repo: `make demo-nats` / `make loadtest`. Full lab guide: [local-do
 
 1. Keep changes focused; match existing package style (small interfaces, table-driven tests).
 2. Run `make fmt-check`, `make test`, and `make lint` before opening a PR.
-3. Update docs when changing public APIs or presets (`docs/nats/`, root `README.md`, `CHANGELOG.md`).
+3. Update docs when changing public APIs or config recipes (`docs/nats/`, root `README.md`, `CHANGELOG.md`).
 4. Do not commit secrets.
 
 CI on PRs and `main` runs format, vet, unit tests, examples build, golangci-lint, race, fuzz, benchmarks, and govulncheck.

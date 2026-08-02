@@ -113,10 +113,12 @@ var (
 	ErrJetStreamV2Required          = errors.New("operation requires jetstream v2 API")
 	ErrInvalidNKeySeed              = errors.New("invalid nkey seed")
 	ErrConsumerRecreateRequired     = errors.New("consumer recreate required; delete and recreate explicitly to change immutable settings")
-	ErrConflictingAuth              = errors.New("conflicting auth: set only one of Seed, User/Password, Secret, or CredentialsFile")
-	ErrSupervisorGiveUp             = errors.New("subscription supervisor gave up after max retries")
-	ErrConsumerStall                = errors.New("consumer soft-liveness stall: pending rising without process activity")
-	ErrInvalidReplayBound           = errors.New("invalid replay bound")
+	ErrConflictingAuth              = errors.New(
+		"conflicting auth: set only one of Address userinfo, Seed, User/Password, Secret, or CredentialsFile",
+	)
+	ErrSupervisorGiveUp   = errors.New("subscription supervisor gave up after max retries")
+	ErrConsumerStall      = errors.New("consumer soft-liveness stall: pending rising without process activity")
+	ErrInvalidReplayBound = errors.New("invalid replay bound")
 )
 
 // Consumer metadata keys for intended replay bounds (JetStream has no server-side end).

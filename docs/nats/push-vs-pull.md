@@ -98,7 +98,7 @@ When the worker pool queue is full, `handlePoolBackpressure` applies the configu
 | Block | `BackpressureBlock` (default) | Block NATS callback until pool has capacity | Strict ordering, no message loss |
 | NAK | `BackpressureNak` | NAK immediately; message redelivers | Prefer redelivery over blocking |
 | Term | `BackpressureTerm` | Terminal ack; skip message | Poison messages, optional drop |
-| Drop | `BackpressureDrop` | Drop and log | Opt-in lossy path only |
+| Drop | `BackpressureDrop` | Term + log (clears Ack-pending) | Opt-in lossy path only |
 
 ```go
 cfg.Backpressure = libnats.BackpressureConfig{

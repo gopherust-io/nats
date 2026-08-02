@@ -19,7 +19,7 @@ mkdir -p "$(dirname "$OUT")"
 	echo "# $(go version)"
 	echo "# $(go env GOOS)/$(go env GOARCH) — $(sysctl -n machdep.cpu.brand_string 2>/dev/null || true)"
 	echo "#"
-	go test -bench='BenchmarkCodecComparison|BenchmarkPublishJSON|BenchmarkPublishBytes|BenchmarkPublishAsyncBytes|BenchmarkWorkerPool' \
+	go test -bench='BenchmarkCodecComparison|BenchmarkPublishJSON|BenchmarkPublishBytes|BenchmarkPublishAsyncBytes|BenchmarkWorkerPool|BenchmarkPayload|BenchmarkPubSubPayload|BenchmarkRequestReplyPayload|BenchmarkDecideAdaptivePressure' \
 		-benchmem -count="${COUNT}" -run '^$' \
 		. ./workerpool/
 	echo "#"

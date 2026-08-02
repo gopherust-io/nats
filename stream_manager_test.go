@@ -19,7 +19,8 @@ func TestToNatsStreamConfigDefaults(t *testing.T) {
 
 	assert.Equal(t, "ORDERS", sc.Name)
 	assert.Equal(t, []string{"orders.>"}, sc.Subjects)
-	assert.Equal(t, 1, sc.Replicas)
+	// Replicas default applied in CreateOrUpdateStream only (preserve on update).
+	assert.Equal(t, 0, sc.Replicas)
 	assert.Equal(t, natspkg.LimitsPolicy, sc.Retention)
 }
 

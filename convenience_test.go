@@ -25,26 +25,6 @@ func TestMessageWithMsgIDPreservesExistingHeader(t *testing.T) {
 	assert.Equal(t, []string{"pay-456"}, msg.Header[HeaderMsgID])
 }
 
-func TestDevConfig(t *testing.T) {
-	cfg := DevConfig()
-	assert.Empty(t, cfg.Stream.Name)
-	assert.False(t, cfg.Metrics.AllowMetrics)
-	assert.False(t, cfg.Conn.AllowReconnect)
-}
-
-func TestProdWorkerConfig(t *testing.T) {
-	cfg := ProdWorkerConfig()
-	assert.Empty(t, cfg.Stream.Name)
-	assert.True(t, cfg.RuntimeConsumer.WorkerPoolEnabled)
-	assert.Equal(t, BackpressureNak, cfg.Backpressure.Mode)
-}
-
-func TestProdFanOutConfig(t *testing.T) {
-	cfg := ProdFanOutConfig()
-	assert.Empty(t, cfg.Stream.Name)
-	assert.Equal(t, BackpressureBlock, cfg.Backpressure.Mode)
-}
-
 func TestHandlerTyped(t *testing.T) {
 	type payload struct {
 		ID string `json:"id"`

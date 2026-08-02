@@ -103,9 +103,9 @@ func runGopherust(
 ) {
 	var cfg libnats.Config
 	if metrics {
-		cfg = libnats.ProdWorkerConfig()
+		cfg = jobWorkerConfig()
 	} else {
-		cfg = libnats.ThroughputConfig()
+		cfg = maxThroughputConfig()
 	}
 	cfg.Conn.Address = natsURL
 	cfg.Stream = libnats.StreamConfig{
@@ -267,6 +267,42 @@ func runNatsGo(
 func mustJSON(v any) []byte {
 	b, _ := json.Marshal(v)
 	return b
+}
+
+func jobWorkerConfig() libnats.Config {
+	cfg := libnats.DefaultConfig()
+	cfg.RuntimeConsumer.WorkerPoolEnabled = true
+	cfg.RuntimeConsumer.WorkerPoolSize = 8
+	cfg.RuntimeConsumer.WorkerBufferSize = 256
+	cfg.RuntimeConsumer.AckWait = 45 * time.Second
+	cfg.RuntimeConsumer.PendingMsgLimit = 1000
+	cfg.RuntimeConsumer.PendingMsgBuffer = 10 << 20
+	cfg.Backpressure.Mode = libnats.BackpressureNak
+	cfg.Backpressure.MaxAckPending = 1000
+	return cfg
+}
+
+func maxThroughputConfig() libnats.Config {
+	cfg := jobWorkerConfig()
+	cfg.PublisherConfig.AllowMetrics = false
+	cfg.PublisherConfig.AllowTracing = false
+	cfg.PublisherConfig.SkipSubjectValidation = true
+	cfg.RequesterConfig.AllowMetrics = false
+	cfg.RequesterConfig.AllowTracing = false
+	cfg.RequesterConfig.SkipSubjectValidation = true
+	cfg.ResponderConfig.AllowMetrics = false
+	cfg.ResponderConfig.AllowTracing = false
+	cfg.RuntimeConsumer.AllowMetrics = false
+	cfg.RuntimeConsumer.AllowTracing = false
+	cfg.Conn.AllowMetrics = false
+	cfg.Metrics.AllowMetrics = false
+	cfg.Metrics.AllowTracing = false
+	cfg.Metrics.CollectInterval = 60 * time.Second
+	cfg.Metrics.Lite = true
+	cfg.Metrics.FixedCardinality = true
+	cfg.Metrics.TrackedStreams = nil
+	cfg.Metrics.TrackedConsumers = nil
+	return cfg
 }
 
 func max(a, b int) int {
