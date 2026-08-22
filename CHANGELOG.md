@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.7.0
+
+- **Context flow control** — pull v2 `Fetch`/`Process` honor cancel via `jetstream.FetchContext` (exit on `Canceled`); sync publish passes `nats.Context(ctx)`; pull pool batch wait races `wg` against `ctx.Done()`.
+- **Breaking:** removed `idempotency.BloomStore` / `NewBloomStore` (and `WithBackend`). Use `NewKVStore` or a custom `DedupStore`.
+- **Multi-filter pull bind** — durable `Pull()` uses `nats.Bind(stream, durable)` and prefers the new jetstream API so `FilterSubjects` without a common prefix bind correctly.
+- **`SetupWorker` + `FilterSubjects`** — multi-filter durables are created then queue-bound with `nats.Bind`.
+- **CRUD `ctx` propagation** — stream/consumer create/update/delete/info race against context cancellation via `runWithContext`.
+- **Ordered consumers** — `Consumer.OrderedSubscribe` / `Client.OrderedSubscribe` (jetstream ordered consume, AckNone semantics).
+- **Circuit breaker** — `Config.Circuit` pauses pull `Process` when Adaptive Pressure reaches critical.
+- **DLQ redrive** — `dlq.ReplayToStream` with dry-run, rate limit, and reason/subject filters.
+- **Incident AttachToHandler** — `Incidents().AttachToHandler` one-line capsule capture on handler errors.
+- **Schema headers** — `X-NATS-Schema` / version helpers + `DecodeMsgWithSchema`.
+- **Outbox leaf** — `outbox` package for KV-backed enqueue/flush (DB-commit-then-publish).
+- **Delayed publish** — `PublishDelayedJSON` schedule-subject helper.
+- **JetStream domain** — `Connection.Domain` wires legacy + jetstream v2 clients (`$JS.<domain>.API`).
+- **Consol contracts** — [docs/nats/consol-integration.md](docs/nats/consol-integration.md) documents fingerprint + capsule schemas.
+
 ## v0.6.0
 
 - **Request/reply payload compression** — `RequesterConfig` / `ResponderConfig` `PayloadCompression` + `PayloadDecompression` (same >32 KiB br/gzip rules as publish). Reply compress via `Responder().Respond*`; package-level `Respond*` unchanged. Bench: `BenchmarkRequestReplyPayload`. See [performance.md](docs/performance.md).

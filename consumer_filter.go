@@ -1,16 +1,15 @@
 package nats
 
 import (
-	"context"
 	"strings"
 
 	natspkg "github.com/nats-io/nats.go"
-	"github.com/rs/zerolog"
 
 	"github.com/gopherust-io/nats/internal/bytesconv"
 )
 
-// consumerFilterSubject resolves the pull-subscribe subject from consumer config.
+// consumerFilterSubject resolves a covering subscribe subject from consumer config.
+// Prefer Pull with nats.Bind(stream, durable) so multi-filter durables bind by name.
 // When multiple filter subjects share a token prefix, a wildcard subject is derived.
 func consumerFilterSubject(cfg natspkg.ConsumerConfig) string {
 	if !bytesconv.IsEmpty(cfg.FilterSubject) {
@@ -30,13 +29,9 @@ func consumerFilterSubjects(subjects []string) string {
 		if wild := commonWildcardSubject(subjects); !bytesconv.IsEmpty(wild) {
 			return wild
 		}
-
-		zerolog.Ctx(context.Background()).Warn().
-			Any("filter_subjects", subjects).
-			Str("selected", subjects[0]).
-			Msg("pull consumer filter subjects share no common token prefix; using first filter only")
-
-		return subjects[0]
+		// No shared prefix: return ">" so callers that still need a subject
+		// (legacy BindStream paths) do not silently drop filters. Prefer Bind.
+		return ">"
 	}
 }
 

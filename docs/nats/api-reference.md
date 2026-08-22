@@ -251,7 +251,6 @@ Prefer `github.com/gopherust-io/nats/shard`. Root `nats` re-exports the same hel
 | `ClaimStore` | Optional: `Claim` / `Release` — used by `NewKVStore` for claim-before-process |
 | `ErrClaimInFlight` | Another worker holds a **pending** claim — Nak (do not Ack); completed claims still Ack (`Seen` true) |
 | `NewKVStore(kv)` | JetStream KV-backed `DedupStore`/`ClaimStore` (use a TTL'd bucket) |
-| `NewBloomStore(bits, hashes)` | In-memory probabilistic Seen; **not** ClaimStore — use with `WithBackend` or prefer KV for queues |
 | `WithHandler(store, extractID, handler)` | Wrap handler with consume-side dedup (ClaimStore path is race-safe for queues) |
 | `MsgIDFromHeader(msg)` | Read `Nats-Msg-Id` from message |
 

@@ -17,13 +17,27 @@ const (
 )
 
 const (
-	HeaderContentType     = "Nats-Content-Type"
+	// HeaderContentType is the historical NATS payload type header (json/protobuf/msgpack).
+	HeaderContentType = "Nats-Content-Type"
+	// HeaderNATSContentType is an alias of HeaderContentType.
+	HeaderNATSContentType = HeaderContentType
+	// HeaderNatsContentType is a legacy alias of HeaderContentType.
+	HeaderNatsContentType = HeaderContentType
+	HeaderHTTPContentType = "Content-Type"
 	HeaderMsgID           = "Nats-Msg-Id"
 	HeaderTraceID         = "Trace-Id"
 	HeaderContentEncoding = "Content-Encoding"
-	ContentTypeJSON       = "json"
-	ContentTypeProto      = "protobuf"
-	ContentTypeMsgPack    = "msgpack"
+
+	ContentTypeJSON    = "json"
+	ContentTypeProto   = "protobuf"
+	ContentTypeMsgPack = "msgpack"
+
+	ApplicationJSON              = "application/json"
+	ApplicationMsgPack           = "application/msgpack"
+	ApplicationXMsgPack          = "application/x-msgpack"
+	ApplicationProtobuf          = "application/protobuf"
+	ApplicationXProtobuf         = "application/x-protobuf"
+	ApplicationVNDGoogleProtobuf = "application/vnd.google.protobuf"
 )
 
 // PayloadCompressionMode selects publisher-side payload compression.

@@ -32,7 +32,7 @@ Ecosystem: [gopherust-io](https://github.com/gopherust-io/gopherust-io/blob/main
 └─────────────────────────────────────────────────────────────┘
 
 Leaf packages (compose around handlers / subjects):
-  idempotency/  dlq/  shadow/  shard/  workerpool/
+  idempotency/  dlq/  shadow/  shard/  workerpool/  outbox/
 ```
 
 ## Packages
@@ -45,6 +45,7 @@ Leaf packages (compose around handlers / subjects):
 | `shadow/` | Shadow-traffic middleware around handlers |
 | `shard/` | Subject / index sharding helpers |
 | `workerpool/` | Bounded worker pool for handler fan-out |
+| `outbox/` | KV-backed enqueue/flush for DB-commit-then-publish |
 | `internal/bytesconv` | Shared zero-copy string/bytes helpers |
 | `docs/` | Getting started, API reference, recipes, scaling |
 | `examples/`, `bench/`, `tools/`, `docker/` | Demos, benches, loadtest, local NATS |

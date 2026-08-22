@@ -44,7 +44,7 @@ func TestHandlerTyped(t *testing.T) {
 	err = handler(context.Background(), &natspkg.Msg{
 		Subject: "orders.created",
 		Data:    data,
-		Header:  natspkg.Header{HeaderContentType: []string{ContentTypeJSON}},
+		Header:  natspkg.Header{HeaderNatsContentType: []string{ContentTypeJSON}},
 	})
 	require.NoError(t, err)
 	assert.True(t, called)

@@ -163,7 +163,7 @@ func BenchmarkDecodeJSON(b *testing.B) {
 }
 
 func BenchmarkMessageTypeFromHeader(b *testing.B) {
-	h := natspkg.Header{HeaderContentType: []string{ContentTypeJSON}}
+	h := natspkg.Header{HeaderNatsContentType: []string{ContentTypeJSON}}
 	b.ReportAllocs()
 
 	for b.Loop() {
@@ -302,7 +302,7 @@ func BenchmarkHandlerTyped(b *testing.B) {
 	msg := &natspkg.Msg{
 		Subject: "bench.subject",
 		Data:    data,
-		Header:  natspkg.Header{HeaderContentType: []string{ContentTypeJSON}},
+		Header:  natspkg.Header{HeaderNatsContentType: []string{ContentTypeJSON}},
 	}
 	handler := HandlerTyped[payload](JSON, func(_ context.Context, _ string, _ payload) error { return nil })
 

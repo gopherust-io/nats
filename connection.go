@@ -11,6 +11,7 @@ import (
 	"time"
 
 	natspkg "github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
 	"github.com/nats-io/nkeys"
 	"github.com/rs/zerolog"
 
@@ -719,6 +720,7 @@ type client struct {
 	monitoring     Monitoring
 	replay         Replay
 	js             natspkg.JetStreamContext
+	jsNew          jetstream.JetStream
 
 	ctx       context.Context
 	lastError error

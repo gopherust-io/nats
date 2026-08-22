@@ -50,10 +50,12 @@ type keyValueManager struct {
 	jsNew jetstream.JetStream
 }
 
-func newKeyValueManager(conn *natspkg.Conn, js natspkg.JetStreamContext) *keyValueManager {
-	mgr := &keyValueManager{js: js}
-	if jsNew, err := jetstream.New(conn); err == nil {
-		mgr.jsNew = jsNew
+func newKeyValueManager(conn *natspkg.Conn, js natspkg.JetStreamContext, jsNew jetstream.JetStream) *keyValueManager {
+	mgr := &keyValueManager{js: js, jsNew: jsNew}
+	if mgr.jsNew == nil && conn != nil {
+		if created, err := jetstream.New(conn); err == nil {
+			mgr.jsNew = created
+		}
 	}
 
 	return mgr

@@ -13,7 +13,7 @@ import (
 )
 
 func TestNewConsumerDefaults(t *testing.T) {
-	c := newConsumer(context.Background(), RuntimeConsumerConfig{}, BackpressureConfig{}, nil, nil, false, AdaptivePressureConfig{})
+	c := newConsumer(context.Background(), RuntimeConsumerConfig{}, BackpressureConfig{}, nil, nil, nil, false, AdaptivePressureConfig{}, CircuitConfig{})
 	require.NotNil(t, c)
 	assert.Equal(t, 30*time.Second, c.cfg.AckWait)
 }
@@ -23,7 +23,7 @@ func TestAppendConsumerOpts(t *testing.T) {
 		AckWait:       10 * time.Second,
 		IdleHeartbeat: time.Second,
 		FlowControl:   true,
-	}, BackpressureConfig{}, nil, nil, false, AdaptivePressureConfig{})
+	}, BackpressureConfig{}, nil, nil, nil, false, AdaptivePressureConfig{}, CircuitConfig{})
 
 	opts := c.appendConsumerOpts(nil, false)
 	require.NotEmpty(t, opts)
@@ -38,7 +38,7 @@ func TestAppendConsumerOptsSkipsHeartbeatWhenDisabled(t *testing.T) {
 	c := newConsumer(context.Background(), RuntimeConsumerConfig{
 		AckWait:       10 * time.Second,
 		IdleHeartbeat: 0,
-	}, BackpressureConfig{}, nil, nil, false, AdaptivePressureConfig{})
+	}, BackpressureConfig{}, nil, nil, nil, false, AdaptivePressureConfig{}, CircuitConfig{})
 	opts := c.appendConsumerOpts(nil, false)
 	queueOpts := c.appendConsumerOpts(nil, true)
 	assert.Equal(t, len(opts), len(queueOpts))
@@ -89,8 +89,9 @@ func TestWrapHandlerDirectPath(t *testing.T) {
 		context.Background(),
 		RuntimeConsumerConfig{WorkerPoolEnabled: false},
 		BackpressureConfig{},
-		nil, nil, false,
+		nil, nil, nil, false,
 		AdaptivePressureConfig{},
+		CircuitConfig{},
 	)
 	wrapped := c.wrapHandler(context.Background(), func(_ context.Context, _ *natspkg.Msg) error {
 		return nil
@@ -120,7 +121,7 @@ func TestDecodeTyped(t *testing.T) {
 	msg := &natspkg.Msg{
 		Subject: "typed.subject",
 		Data:    data,
-		Header:  natspkg.Header{HeaderContentType: []string{ContentTypeJSON}},
+		Header:  natspkg.Header{HeaderNatsContentType: []string{ContentTypeJSON}},
 	}
 
 	decoded, err := DecodeTyped[payload](msg, 0)

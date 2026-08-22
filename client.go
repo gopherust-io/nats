@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	natspkg "github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
 	"github.com/rs/zerolog"
 
 	"github.com/gopherust-io/nats/internal/bytesconv"
@@ -27,6 +28,7 @@ type Client interface {
 	// PublishRaw publishes bytes with optional headers and returns the JetStream ack.
 	PublishRaw(ctx context.Context, subject string, data []byte, headers map[string]string) (*PubAck, error)
 	SetupWorker(ctx context.Context, setup WorkerSetup, handler MsgHandler) (Subscription, error)
+	OrderedSubscribe(ctx context.Context, stream string, cfg OrderedConsumerConfig, handler MsgHandler) (OrderedSubscription, error)
 	SuperviseQueueSubscribeBound(ctx context.Context, stream, durable, queue, subject string, handler MsgHandler, cfg SupervisorConfig) (SupervisedSubscription, error)
 	SuperviseSubscribeBound(ctx context.Context, stream, durable, subject string, handler MsgHandler, cfg SupervisorConfig) (SupervisedSubscription, error)
 	SupervisePullProcess(ctx context.Context, stream, durable string, handler MsgHandler, cfg SupervisorConfig, opts ...ProcessOpt) error
@@ -90,9 +92,15 @@ func NewClient(ctx context.Context, cfg *Config) (Client, error) {
 	cl.conn = nc
 	cl.publisher = newPublisher(ctx, cfg.PublisherConfig, nil, nc, cfg.Conn.ReconnectBufSize, cl.metrics, metricsCfg.AllowTracing)
 
-	js, err := nc.JetStream(natspkg.PublishAsyncErrHandler(func(_ natspkg.JetStream, _ *natspkg.Msg, pubErr error) {
-		cl.publisher.noteAsyncErr(pubErr)
-	}))
+	jsOpts := []natspkg.JSOpt{
+		natspkg.PublishAsyncErrHandler(func(_ natspkg.JetStream, _ *natspkg.Msg, pubErr error) {
+			cl.publisher.noteAsyncErr(pubErr)
+		}),
+	}
+	if !bytesconv.IsEmpty(cfg.Conn.Domain) {
+		jsOpts = append(jsOpts, natspkg.Domain(cfg.Conn.Domain))
+	}
+	js, err := nc.JetStream(jsOpts...)
 	if err != nil {
 		nc.Close()
 
@@ -102,15 +110,28 @@ func NewClient(ctx context.Context, cfg *Config) (Client, error) {
 	cl.js = js
 	cl.publisher.js = js
 
+	var jsNew jetstream.JetStream
+	if !bytesconv.IsEmpty(cfg.Conn.Domain) {
+		jsNew, err = jetstream.NewWithDomain(nc, cfg.Conn.Domain)
+	} else {
+		jsNew, err = jetstream.New(nc)
+	}
+	if err != nil {
+		nc.Close()
+
+		return nil, fmt.Errorf("jetstream v2: %w", err)
+	}
+	cl.jsNew = jsNew
+
 	cl.collector = newMetricsCollector(ctx, nc, js, metricsCfg, cl.metrics)
 
 	cl.streams = newStreamManager(js)
-	cl.consumers = newConsumerManager(nc, js)
-	cl.kv = newKeyValueManager(nc, js)
+	cl.consumers = newConsumerManager(nc, js, jsNew)
+	cl.kv = newKeyValueManager(nc, js, jsNew)
 	cl.objects = newObjectStoreManager(js)
 	cl.monitoring = newMonitoring(cfg.Conn.ConnectTimeout)
 	cl.replay = newReplay(cl.streams, cl.consumers)
-	cl.consumer = newConsumer(ctx, cfg.RuntimeConsumer, cfg.Backpressure, js, cl.metrics, metricsCfg.AllowTracing, cfg.AdaptivePressure)
+	cl.consumer = newConsumer(ctx, cfg.RuntimeConsumer, cfg.Backpressure, js, jsNew, cl.metrics, metricsCfg.AllowTracing, cfg.AdaptivePressure, cfg.Circuit)
 	cl.requester = newRequester(cfg.RequesterConfig, nc, cl.metrics, metricsCfg.AllowTracing)
 	cl.responder = newResponder(cfg.ResponderConfig, nc, cl.metrics, metricsCfg.AllowTracing)
 

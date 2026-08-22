@@ -28,7 +28,7 @@ func TestConsumerFilterSubjectsNoCommon(t *testing.T) {
 	cfg := natspkg.ConsumerConfig{
 		FilterSubjects: []string{"orders.created", "payments.settled"},
 	}
-	assert.Equal(t, "orders.created", consumerFilterSubject(cfg))
+	assert.Equal(t, ">", consumerFilterSubject(cfg))
 }
 
 func TestCommonWildcardSubject(t *testing.T) {

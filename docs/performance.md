@@ -125,7 +125,6 @@ Keep subject cardinality bounded (`METRICS_CARDINALITY_DETECTOR_MAX_CARDINALITY`
 - `PublishAsync` + `PublishAsyncComplete` for batched publish
 - Pull `WithProcessConcurrency(n)` uses a fixed worker set (no per-message goroutine churn)
 - Worker pool `TryPublishNonBlocking` for `BackpressureNak`
-- Idempotency: `idempotency.NewBloomStore` for in-memory probabilistic Seen
 - Payload compression (opt-in) — see below
 
 ## Payload compression (nats-consol parity)

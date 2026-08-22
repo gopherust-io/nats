@@ -22,7 +22,7 @@ JetStream client for Go. Telemetry lives in a separate module: [`github.com/goph
 |---------|--------|------|
 | `nats` | `github.com/gopherust-io/nats` | JetStream client (publish, consume, streams) |
 | `nats/workerpool` | `github.com/gopherust-io/nats/workerpool` | Fixed-size pool used by push consumers |
-| `nats/idempotency` | `github.com/gopherust-io/nats/idempotency` | Consume-side dedup (KV / Bloom) |
+| `nats/idempotency` | `github.com/gopherust-io/nats/idempotency` | Consume-side dedup (KV) |
 | `nats/dlq` | `github.com/gopherust-io/nats/dlq` | Dead-letter + autopsy middleware |
 | `nats/shadow` | `github.com/gopherust-io/nats/shadow` | Shadow/canary dual-run middleware |
 | `nats/shard` | `github.com/gopherust-io/nats/shard` | Stable subject sharding helpers |
