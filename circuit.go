@@ -9,10 +9,9 @@ import (
 //
 // goalign:ignore
 type CircuitConfig struct {
-	Enabled       bool
 	PauseDuration time.Duration
-	// OpenOnLevel opens the circuit at this AdaptivePressureLevel (default PressureCritical).
-	OpenOnLevel AdaptivePressureLevel
+	OpenOnLevel   AdaptivePressureLevel // opens at this level (default PressureCritical)
+	Enabled       bool
 }
 
 func (c CircuitConfig) withDefaults() CircuitConfig {

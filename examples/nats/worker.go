@@ -10,8 +10,9 @@ import (
 	natspkg "github.com/nats-io/nats.go"
 	"github.com/rs/zerolog"
 
-	libnats "github.com/gopherust-io/nats"
 	"github.com/gopherust-io/tel"
+
+	libnats "github.com/gopherust-io/nats"
 )
 
 type orderEvent struct {

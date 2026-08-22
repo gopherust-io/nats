@@ -5,9 +5,10 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/gopherust-io/nats/outbox"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/gopherust-io/nats/outbox"
 )
 
 type memStore struct {

@@ -223,17 +223,18 @@ func (p *pullConsumerV2) processBatch(ctx context.Context, messages []*natspkg.M
 	}
 	batchStart := time.Now()
 	legacy := &pullConsumer{parent: p.parent, metrics: p.metrics}
-	if p.parent != nil && p.parent.cfg.WorkerPoolEnabled {
+	switch {
+	case p.parent != nil && p.parent.cfg.WorkerPoolEnabled:
 		if err := legacy.processBatchWithPool(ctx, messages, handler); err != nil {
 			nakRemaining(messages)
 
 			return err
 		}
-	} else if cfg.concurrency > 1 {
+	case cfg.concurrency > 1:
 		if err := legacy.processBatchConcurrent(ctx, messages, handler, cfg.concurrency); err != nil {
 			return err
 		}
-	} else {
+	default:
 		for i, msg := range messages {
 			if ctx.Err() != nil {
 				nakRemaining(messages[i:])

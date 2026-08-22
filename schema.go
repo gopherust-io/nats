@@ -49,7 +49,7 @@ func ApplySchemaHeaders(msg *Message, name, version, encoding string) {
 }
 
 // SchemaFromHeader reads schema contract headers from a NATS message.
-func SchemaFromHeader(h natspkg.Header) (name, version, encoding string) {
+func SchemaFromHeader(h natspkg.Header) (string, string, string) {
 	if h == nil {
 		return "", "", ""
 	}

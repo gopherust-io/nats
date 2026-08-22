@@ -24,9 +24,9 @@ type OrderedConsumerConfig struct {
 	OptStartSeq       uint64
 	DeliverPolicy     DeliverPolicy
 	ReplayPolicy      ReplayPolicy
-	HeadersOnly       bool
 	HasDeliverPolicy  bool
 	HasReplayPolicy   bool
+	HeadersOnly       bool
 }
 
 // OrderedSubscription is a running ordered consume loop.
@@ -36,9 +36,9 @@ type OrderedSubscription interface {
 }
 
 type orderedSubscription struct {
-	stopOnce sync.Once
-	stopped  chan struct{}
 	cc       jetstream.ConsumeContext
+	stopped  chan struct{}
+	stopOnce sync.Once
 }
 
 func (o *orderedSubscription) Stop() {
@@ -62,7 +62,12 @@ func (o *orderedSubscription) Stopped() <-chan struct{} {
 // one-at-a-time with sequence preservation (new jetstream API).
 // Handlers should not Ack/Nak — ordered consumers use AckNone and the client
 // manages cursor reset on gaps.
-func (c *consumer) OrderedSubscribe(ctx context.Context, stream string, cfg OrderedConsumerConfig, handler MsgHandler) (OrderedSubscription, error) {
+func (c *consumer) OrderedSubscribe(
+	ctx context.Context,
+	stream string,
+	cfg OrderedConsumerConfig,
+	handler MsgHandler,
+) (OrderedSubscription, error) {
 	if err := ValidateStreamName(stream); err != nil {
 		return nil, fmt.Errorf("ordered subscribe stream=%q: %w", stream, err)
 	}
@@ -134,6 +139,11 @@ func (c *consumer) OrderedSubscribe(ctx context.Context, stream string, cfg Orde
 }
 
 // OrderedSubscribe is exposed on Client for the ordered consumer façade.
-func (c *client) OrderedSubscribe(ctx context.Context, stream string, cfg OrderedConsumerConfig, handler MsgHandler) (OrderedSubscription, error) {
+func (c *client) OrderedSubscribe(
+	ctx context.Context,
+	stream string,
+	cfg OrderedConsumerConfig,
+	handler MsgHandler,
+) (OrderedSubscription, error) {
 	return c.consumer.OrderedSubscribe(ctx, stream, cfg, handler)
 }

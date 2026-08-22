@@ -9,8 +9,9 @@ import (
 	natspkg "github.com/nats-io/nats.go"
 	"github.com/rs/zerolog"
 
-	libnats "github.com/gopherust-io/nats"
 	"github.com/gopherust-io/tel"
+
+	libnats "github.com/gopherust-io/nats"
 )
 
 func runPuller(ctx context.Context, client libnats.Client, telem *tel.Telemetry) error {

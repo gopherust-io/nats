@@ -17,11 +17,6 @@ type MessageSource interface {
 	GetNextMsgAfter(ctx context.Context, stream string, seq uint64) (*natspkg.RawStreamMsg, error)
 }
 
-// ReplayPublisher publishes redriven payloads to a destination subject.
-type ReplayPublisher interface {
-	PublishRaw(ctx context.Context, subject string, msg RawPublish) error
-}
-
 // ReplayConfig configures batch redrive from a DLQ stream.
 //
 // goalign:ignore
@@ -49,7 +44,7 @@ type ReplayResult struct {
 }
 
 // ReplayToStream redrives messages from a DLQ (or any) stream onto DestSubject.
-func ReplayToStream(ctx context.Context, src MessageSource, pub ReplayPublisher, cfg ReplayConfig) (*ReplayResult, error) {
+func ReplayToStream(ctx context.Context, src MessageSource, pub Publisher, cfg ReplayConfig) (*ReplayResult, error) {
 	if src == nil || pub == nil {
 		return nil, fmt.Errorf("dlq replay: source and publisher are required")
 	}
@@ -72,19 +67,17 @@ func ReplayToStream(ctx context.Context, src MessageSource, pub ReplayPublisher,
 		if err := ctx.Err(); err != nil {
 			return out, err
 		}
-		var (
-			raw *natspkg.RawStreamMsg
-			err error
-		)
+		var raw *natspkg.RawStreamMsg
+		var fetchErr error
 		if out.Considered == 0 {
-			raw, err = src.GetMsg(ctx, cfg.SourceStream, seq)
-			if err != nil {
-				raw, err = src.GetNextMsgAfter(ctx, cfg.SourceStream, seq-1)
+			raw, fetchErr = src.GetMsg(ctx, cfg.SourceStream, seq)
+			if fetchErr != nil {
+				raw, fetchErr = src.GetNextMsgAfter(ctx, cfg.SourceStream, seq-1)
 			}
 		} else {
-			raw, err = src.GetNextMsgAfter(ctx, cfg.SourceStream, seq)
+			raw, fetchErr = src.GetNextMsgAfter(ctx, cfg.SourceStream, seq)
 		}
-		if err != nil || raw == nil {
+		if fetchErr != nil || raw == nil {
 			break
 		}
 		seq = raw.Sequence
@@ -125,14 +118,14 @@ func ReplayToStream(ctx context.Context, src MessageSource, pub ReplayPublisher,
 	return out, nil
 }
 
-func matchReplayFilters(h map[string][]string, cfg ReplayConfig) bool {
+func matchReplayFilters(headers map[string][]string, cfg ReplayConfig) bool {
 	if !bytesconv.IsEmpty(cfg.ReasonFilter) {
-		if !strings.EqualFold(headerGet(h, HeaderReason), cfg.ReasonFilter) {
+		if !strings.EqualFold(headerGet(headers, HeaderReason), cfg.ReasonFilter) {
 			return false
 		}
 	}
 	if !bytesconv.IsEmpty(cfg.SubjectFilter) {
-		if headerGet(h, HeaderOriginalSubject) != cfg.SubjectFilter {
+		if headerGet(headers, HeaderOriginalSubject) != cfg.SubjectFilter {
 			return false
 		}
 	}
@@ -140,24 +133,24 @@ func matchReplayFilters(h map[string][]string, cfg ReplayConfig) bool {
 	return true
 }
 
-func stripDLQHeaders(h map[string][]string) {
+func stripDLQHeaders(headers map[string][]string) {
 	for _, k := range []string{
 		HeaderOriginalSubject, HeaderStream, HeaderSequence, HeaderNumDelivered,
 		HeaderReason, HeaderConsumer, HeaderAutopsyError, HeaderAutopsyHash, HeaderAutopsyStack,
 	} {
-		delete(h, k)
+		delete(headers, k)
 	}
 }
 
-func headerGet(h map[string][]string, key string) string {
-	if h == nil {
+func headerGet(headers map[string][]string, key string) string {
+	if headers == nil {
 		return ""
 	}
-	if vals, ok := h[key]; ok && len(vals) > 0 {
+	if vals, ok := headers[key]; ok && len(vals) > 0 {
 		return vals[0]
 	}
 	// Case-insensitive fallback.
-	for k, vals := range h {
+	for k, vals := range headers {
 		if strings.EqualFold(k, key) && len(vals) > 0 {
 			return vals[0]
 		}

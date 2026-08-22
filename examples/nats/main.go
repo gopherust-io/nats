@@ -9,10 +9,11 @@ import (
 	"syscall"
 	"time"
 
-	libnats "github.com/gopherust-io/nats"
-	"github.com/gopherust-io/nats/internal/bytesconv"
 	"github.com/gopherust-io/tel"
 	"github.com/rs/zerolog"
+
+	libnats "github.com/gopherust-io/nats"
+	"github.com/gopherust-io/nats/internal/bytesconv"
 )
 
 // Topology names are env-overridable so the example can run alongside streams

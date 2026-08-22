@@ -134,7 +134,8 @@ func (m *consumerManager) CreateOrUpdateConsumer(
 		if existing.Config.DeliverPolicy != cc.DeliverPolicy {
 			return nil, fmt.Errorf(
 				"create or update consumer stream=%q durable=%q: deliver policy %v -> %v: %w",
-				stream, cfg.Durable, existing.Config.DeliverPolicy, cc.DeliverPolicy, ErrConsumerRecreateRequired)
+				stream, cfg.Durable, existing.Config.DeliverPolicy, cc.DeliverPolicy, ErrConsumerRecreateRequired,
+			)
 		}
 
 		info, err = m.js.UpdateConsumer(stream, cc)

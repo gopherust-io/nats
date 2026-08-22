@@ -1,6 +1,6 @@
 module github.com/gopherust-io/nats
 
-go 1.27
+go 1.26.6
 
 require (
 	github.com/andybalholm/brotli v1.2.2

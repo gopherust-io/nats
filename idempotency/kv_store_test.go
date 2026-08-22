@@ -85,12 +85,15 @@ func (f *fakeKV) Purge(key string, _ ...natspkg.DeleteOpt) error {
 	delete(f.data, key)
 	return nil
 }
+
 func (f *fakeKV) Watch(string, ...natspkg.WatchOpt) (natspkg.KeyWatcher, error) {
 	panic("unexpected")
 }
+
 func (f *fakeKV) WatchAll(...natspkg.WatchOpt) (natspkg.KeyWatcher, error) {
 	panic("unexpected")
 }
+
 func (f *fakeKV) WatchFiltered([]string, ...natspkg.WatchOpt) (natspkg.KeyWatcher, error) {
 	panic("unexpected")
 }
@@ -98,6 +101,7 @@ func (f *fakeKV) Keys(...natspkg.WatchOpt) ([]string, error) { panic("unexpected
 func (f *fakeKV) ListKeys(...natspkg.WatchOpt) (natspkg.KeyLister, error) {
 	panic("unexpected")
 }
+
 func (f *fakeKV) History(string, ...natspkg.WatchOpt) ([]natspkg.KeyValueEntry, error) {
 	panic("unexpected")
 }

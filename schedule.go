@@ -20,7 +20,13 @@ type SchedulePublishConfig struct {
 }
 
 // PublishDelayedJSON publishes JSON to a delay subject derived from subject + delay.
-func (p *publisher) PublishDelayedJSON(ctx context.Context, subject string, delay time.Duration, data any, cfg SchedulePublishConfig) error {
+func (p *publisher) PublishDelayedJSON(
+	ctx context.Context,
+	subject string,
+	delay time.Duration,
+	data any,
+	cfg SchedulePublishConfig,
+) error {
 	dest, err := delayedSubject(subject, delay, cfg)
 	if err != nil {
 		return err

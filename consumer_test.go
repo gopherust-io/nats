@@ -13,7 +13,14 @@ import (
 )
 
 func TestNewConsumerDefaults(t *testing.T) {
-	c := newConsumer(context.Background(), RuntimeConsumerConfig{}, BackpressureConfig{}, nil, nil, nil, false, AdaptivePressureConfig{}, CircuitConfig{})
+	c := newConsumer(
+		context.Background(),
+		RuntimeConsumerConfig{},
+		BackpressureConfig{},
+		nil, nil, nil, false,
+		AdaptivePressureConfig{},
+		CircuitConfig{},
+	)
 	require.NotNil(t, c)
 	assert.Equal(t, 30*time.Second, c.cfg.AckWait)
 }
