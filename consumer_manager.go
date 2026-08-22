@@ -31,10 +31,12 @@ type consumerManager struct {
 	jsNew jetstream.JetStream
 }
 
-func newConsumerManager(conn *natspkg.Conn, js natspkg.JetStreamContext) ConsumerManager {
-	mgr := &consumerManager{js: js}
-	if jsNew, err := jetstream.New(conn); err == nil {
-		mgr.jsNew = jsNew
+func newConsumerManager(conn *natspkg.Conn, js natspkg.JetStreamContext, jsNew jetstream.JetStream) ConsumerManager {
+	mgr := &consumerManager{js: js, jsNew: jsNew}
+	if mgr.jsNew == nil && conn != nil {
+		if created, err := jetstream.New(conn); err == nil {
+			mgr.jsNew = created
+		}
 	}
 
 	return mgr
@@ -86,10 +88,13 @@ func toNatsConsumerConfig(cfg DurableConsumerConfig) *natspkg.ConsumerConfig {
 }
 
 func (m *consumerManager) CreateOrUpdateConsumer(
-	_ context.Context,
+	ctx context.Context,
 	stream string,
 	cfg DurableConsumerConfig,
 ) (*natspkg.ConsumerInfo, error) {
+	if err := ctxReady(ctx); err != nil {
+		return nil, err
+	}
 	if err := ValidateStreamName(stream); err != nil {
 		return nil, err
 	}
@@ -110,36 +115,42 @@ func (m *consumerManager) CreateOrUpdateConsumer(
 
 	cc := toNatsConsumerConfig(cfg)
 
-	info, err := m.js.AddConsumer(stream, cc)
-	if err == nil {
+	return runWithContextValue(ctx, func() (*natspkg.ConsumerInfo, error) {
+		info, err := m.js.AddConsumer(stream, cc)
+		if err == nil {
+			return info, nil
+		}
+
+		existing, infoErr := m.js.ConsumerInfo(stream, cfg.Durable)
+		if infoErr != nil {
+			return nil, fmt.Errorf("create consumer stream=%q durable=%q: %w", stream, cfg.Durable, err)
+		}
+
+		// Omitted deliver policy keeps the existing value (DeliverAll is a valid zero).
+		if !cfg.HasDeliverPolicy {
+			cc.DeliverPolicy = existing.Config.DeliverPolicy
+		}
+
+		if existing.Config.DeliverPolicy != cc.DeliverPolicy {
+			return nil, fmt.Errorf(
+				"create or update consumer stream=%q durable=%q: deliver policy %v -> %v: %w",
+				stream, cfg.Durable, existing.Config.DeliverPolicy, cc.DeliverPolicy, ErrConsumerRecreateRequired,
+			)
+		}
+
+		info, err = m.js.UpdateConsumer(stream, cc)
+		if err != nil {
+			return nil, fmt.Errorf("update consumer stream=%q durable=%q: %w", stream, cfg.Durable, err)
+		}
+
 		return info, nil
-	}
-
-	existing, infoErr := m.js.ConsumerInfo(stream, cfg.Durable)
-	if infoErr != nil {
-		return nil, fmt.Errorf("create consumer stream=%q durable=%q: %w", stream, cfg.Durable, err)
-	}
-
-	// Omitted deliver policy keeps the existing value (DeliverAll is a valid zero).
-	if !cfg.HasDeliverPolicy {
-		cc.DeliverPolicy = existing.Config.DeliverPolicy
-	}
-
-	if existing.Config.DeliverPolicy != cc.DeliverPolicy {
-		return nil, fmt.Errorf(
-			"create or update consumer stream=%q durable=%q: deliver policy %v -> %v: %w",
-			stream, cfg.Durable, existing.Config.DeliverPolicy, cc.DeliverPolicy, ErrConsumerRecreateRequired)
-	}
-
-	info, err = m.js.UpdateConsumer(stream, cc)
-	if err != nil {
-		return nil, fmt.Errorf("update consumer stream=%q durable=%q: %w", stream, cfg.Durable, err)
-	}
-
-	return info, nil
+	})
 }
 
-func (m *consumerManager) AddConsumer(_ context.Context, stream string, cfg *natspkg.ConsumerConfig) (*natspkg.ConsumerInfo, error) {
+func (m *consumerManager) AddConsumer(ctx context.Context, stream string, cfg *natspkg.ConsumerConfig) (*natspkg.ConsumerInfo, error) {
+	if err := ctxReady(ctx); err != nil {
+		return nil, err
+	}
 	if err := ValidateStreamName(stream); err != nil {
 		return nil, err
 	}
@@ -162,15 +173,20 @@ func (m *consumerManager) AddConsumer(_ context.Context, stream string, cfg *nat
 		return nil, err
 	}
 
-	info, err := m.js.AddConsumer(stream, cfg)
-	if err != nil {
-		return nil, fmt.Errorf("add consumer stream=%q durable=%q: %w", stream, cfg.Durable, err)
-	}
+	return runWithContextValue(ctx, func() (*natspkg.ConsumerInfo, error) {
+		info, err := m.js.AddConsumer(stream, cfg)
+		if err != nil {
+			return nil, fmt.Errorf("add consumer stream=%q durable=%q: %w", stream, cfg.Durable, err)
+		}
 
-	return info, nil
+		return info, nil
+	})
 }
 
-func (m *consumerManager) UpdateConsumer(_ context.Context, stream string, cfg *natspkg.ConsumerConfig) (*natspkg.ConsumerInfo, error) {
+func (m *consumerManager) UpdateConsumer(ctx context.Context, stream string, cfg *natspkg.ConsumerConfig) (*natspkg.ConsumerInfo, error) {
+	if err := ctxReady(ctx); err != nil {
+		return nil, err
+	}
 	if err := ValidateStreamName(stream); err != nil {
 		return nil, err
 	}
@@ -185,15 +201,20 @@ func (m *consumerManager) UpdateConsumer(_ context.Context, stream string, cfg *
 		}
 	}
 
-	info, err := m.js.UpdateConsumer(stream, cfg)
-	if err != nil {
-		return nil, fmt.Errorf("update consumer stream=%q durable=%q: %w", stream, cfg.Durable, err)
-	}
+	return runWithContextValue(ctx, func() (*natspkg.ConsumerInfo, error) {
+		info, err := m.js.UpdateConsumer(stream, cfg)
+		if err != nil {
+			return nil, fmt.Errorf("update consumer stream=%q durable=%q: %w", stream, cfg.Durable, err)
+		}
 
-	return info, nil
+		return info, nil
+	})
 }
 
-func (m *consumerManager) DeleteConsumer(_ context.Context, stream, durable string) error {
+func (m *consumerManager) DeleteConsumer(ctx context.Context, stream, durable string) error {
+	if err := ctxReady(ctx); err != nil {
+		return err
+	}
 	if err := ValidateStreamName(stream); err != nil {
 		return err
 	}
@@ -202,14 +223,19 @@ func (m *consumerManager) DeleteConsumer(_ context.Context, stream, durable stri
 		return err
 	}
 
-	if err := m.js.DeleteConsumer(stream, durable); err != nil {
-		return fmt.Errorf("delete consumer stream=%q durable=%q: %w", stream, durable, err)
-	}
+	return runWithContext(ctx, func() error {
+		if err := m.js.DeleteConsumer(stream, durable); err != nil {
+			return fmt.Errorf("delete consumer stream=%q durable=%q: %w", stream, durable, err)
+		}
 
-	return nil
+		return nil
+	})
 }
 
-func (m *consumerManager) ConsumerInfo(_ context.Context, stream, durable string) (*natspkg.ConsumerInfo, error) {
+func (m *consumerManager) ConsumerInfo(ctx context.Context, stream, durable string) (*natspkg.ConsumerInfo, error) {
+	if err := ctxReady(ctx); err != nil {
+		return nil, err
+	}
 	if err := ValidateStreamName(stream); err != nil {
 		return nil, err
 	}
@@ -218,12 +244,14 @@ func (m *consumerManager) ConsumerInfo(_ context.Context, stream, durable string
 		return nil, err
 	}
 
-	info, err := m.js.ConsumerInfo(stream, durable)
-	if err != nil {
-		return nil, fmt.Errorf("consumer info stream=%q durable=%q: %w", stream, durable, err)
-	}
+	return runWithContextValue(ctx, func() (*natspkg.ConsumerInfo, error) {
+		info, err := m.js.ConsumerInfo(stream, durable)
+		if err != nil {
+			return nil, fmt.Errorf("consumer info stream=%q durable=%q: %w", stream, durable, err)
+		}
 
-	return info, nil
+		return info, nil
+	})
 }
 
 func (m *consumerManager) ConsumerNames(_ context.Context, stream string) ([]string, error) {

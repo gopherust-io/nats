@@ -176,9 +176,10 @@ err = pull.Process(ctx, handler,
 
 | Limitation | Impact | Workaround |
 |------------|--------|------------|
-| `Pull()` multi-filter subjects | When `FilterSubjects` share no common prefix, only the first filter is used for pull bind | Use a wildcard filter (`orders.>`) or separate durables per subject |
-| No multi-message transactions | Cannot atomically publish/consume multiple messages | Use at-least-once + idempotent handlers (see [Idempotency](idempotency.md)) |
-| Manager `ctx` not propagated | Stream/consumer CRUD ignores context cancellation | Use timeouts at application level |
+| No multi-message transactions | Cannot atomically publish/consume multiple messages | Use at-least-once + idempotent handlers (see [Idempotency](idempotency.md)) or the `outbox` leaf package |
+| Queue groups cannot use IdleHeartbeat / FlowControl | Soft liveness for queues is metric-based | Use `WatchSoftLiveness` / lag metrics |
+
+**Resolved (v0.7+):** multi-filter `Pull()` binds with `nats.Bind(stream, durable)` (and jetstream v2 when available); `SetupWorker` supports `FilterSubjects`; stream/consumer CRUD respects `ctx` cancellation; ordered consumers via `OrderedSubscribe`.
 
 **Resolved:** `PublishWithMsgID` / `Message.WithMsgID` for publish dedup; `Pull()` derives wildcard from `FilterSubjects` when subjects share a prefix.
 

@@ -81,6 +81,21 @@ func (c *consumer) Pull(stream, durable string) (PullConsumer, error) {
 		return nil, fmt.Errorf("pull stream=%q: %w", stream, err)
 	}
 
+	// Prefer the new jetstream API when available (domain-aware, multi-filter bind).
+	if c.jsNew != nil && !bytesconv.IsEmpty(durable) {
+		if verr := ValidateDurableName(durable); verr != nil {
+			return nil, fmt.Errorf("pull stream=%q durable=%q: %w", stream, durable, verr)
+		}
+		pc, err := newPullConsumerV2(c.ctx, c, stream, durable)
+		if err == nil {
+			return pc, nil
+		}
+		// Fall back to legacy Bind path below.
+		zerolog.Ctx(c.ctx).Debug().Err(err).
+			Str("stream", stream).Str("durable", durable).
+			Msg("pull v2 bind failed; falling back to legacy PullSubscribe")
+	}
+
 	var (
 		sub *natspkg.Subscription
 		err error
@@ -91,13 +106,9 @@ func (c *consumer) Pull(stream, durable string) (PullConsumer, error) {
 			return nil, fmt.Errorf("pull stream=%q durable=%q: %w", stream, durable, verr)
 		}
 
-		info, infoErr := c.js.ConsumerInfo(stream, durable)
-		if infoErr != nil {
-			return nil, fmt.Errorf("pull consumer info stream=%q durable=%q: %w", stream, durable, infoErr)
-		}
-
-		subject := consumerFilterSubject(info.Config)
-		sub, err = c.js.PullSubscribe(subject, durable, natspkg.BindStream(stream))
+		// Bind to the existing durable by name so multi-filter consumers work
+		// without inventing a covering subscribe subject.
+		sub, err = c.js.PullSubscribe("", durable, natspkg.Bind(stream, durable))
 	} else {
 		sub, err = c.js.PullSubscribe(">", "", natspkg.BindStream(stream))
 	}
@@ -250,6 +261,14 @@ func (p *pullConsumer) Process(ctx context.Context, handler MsgHandler, opts ...
 			})
 			if decision.FetchBatch > 0 {
 				fetchBatch = decision.FetchBatch
+			}
+			if p.parent.circuit != nil && p.parent.circuit.ShouldPause(decision) {
+				select {
+				case <-ctx.Done():
+					return fmt.Errorf("pull process: %w", ctx.Err())
+				case <-time.After(p.parent.circuit.PauseDuration()):
+					continue
+				}
 			}
 		}
 
@@ -409,7 +428,16 @@ func (p *pullConsumer) processBatchWithPool(ctx context.Context, messages []*nat
 		}
 	}
 
-	wg.Wait()
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-ctx.Done():
+		recordErr(fmt.Errorf("pull process: %w", ctx.Err()))
+	}
 
 	if firstErr != nil {
 		return firstErr

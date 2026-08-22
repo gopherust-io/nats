@@ -9,6 +9,7 @@ import (
 	"time"
 
 	natspkg "github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
 	"github.com/rs/zerolog"
 
 	"github.com/gopherust-io/nats/workerpool"
@@ -20,6 +21,7 @@ type Consumer interface {
 	SubscribeBound(ctx context.Context, stream, durable, subject string, handler MsgHandler) (Subscription, error)
 	QueueSubscribeBound(ctx context.Context, stream, durable, queue, subject string, handler MsgHandler) (Subscription, error)
 	Pull(stream, durable string) (PullConsumer, error)
+	OrderedSubscribe(ctx context.Context, stream string, cfg OrderedConsumerConfig, handler MsgHandler) (OrderedSubscription, error)
 }
 
 type Subscription interface {
@@ -38,6 +40,7 @@ type MsgHandler func(context.Context, *natspkg.Msg) error
 type consumer struct {
 	ctx         context.Context
 	js          natspkg.JetStreamContext
+	jsNew       jetstream.JetStream
 	cancel      context.CancelFunc
 	metrics     *clientMetrics
 	workerPool  *workerpool.WorkerPool
@@ -49,6 +52,7 @@ type consumer struct {
 	cfg               RuntimeConsumerConfig
 	backpressure      BackpressureConfig
 	adaptive          *AdaptivePressure
+	circuit           *CircuitBreaker
 	poolOnce          sync.Once
 	stopOnce          sync.Once
 	allowTracing      bool
@@ -126,16 +130,20 @@ func newConsumer(
 	cfg RuntimeConsumerConfig,
 	bp BackpressureConfig,
 	js natspkg.JetStreamContext,
+	jsNew jetstream.JetStream,
 	metrics *clientMetrics,
 	allowTracing bool,
 	adaptive AdaptivePressureConfig,
+	circuit CircuitConfig,
 ) *consumer {
 	c := &consumer{
 		cfg:          cfg,
 		backpressure: bp,
 		js:           js,
+		jsNew:        jsNew,
 		metrics:      metrics,
 		allowTracing: allowTracing && cfg.AllowTracing,
+		circuit:      NewCircuitBreaker(circuit),
 	}
 	if adaptive.Enabled {
 		c.adaptive = NewAdaptivePressure(adaptive)

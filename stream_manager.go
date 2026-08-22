@@ -77,7 +77,10 @@ func toNatsStreamConfig(cfg StreamConfig) *natspkg.StreamConfig {
 	return sc
 }
 
-func (s *streamManager) CreateOrUpdateStream(_ context.Context, cfg StreamConfig) (*natspkg.StreamInfo, error) {
+func (s *streamManager) CreateOrUpdateStream(ctx context.Context, cfg StreamConfig) (*natspkg.StreamInfo, error) {
+	if err := ctxReady(ctx); err != nil {
+		return nil, err
+	}
 	if err := ValidateStreamName(cfg.Name); err != nil {
 		return nil, err
 	}
@@ -91,31 +94,36 @@ func (s *streamManager) CreateOrUpdateStream(_ context.Context, cfg StreamConfig
 		sc.Replicas = defaultStreamReplicas
 	}
 
-	info, addErr := s.js.AddStream(sc)
-	if addErr == nil {
-		return info, nil
-	}
-
-	// On update, preserve existing replica count when caller left Replicas unset.
-	updateCfg := toNatsStreamConfig(cfg)
-	if cfg.Replicas == 0 {
-		if existing, infoErr := s.js.StreamInfo(cfg.Name); infoErr == nil && existing != nil {
-			updateCfg.Replicas = existing.Config.Replicas
+	return runWithContextValue(ctx, func() (*natspkg.StreamInfo, error) {
+		info, addErr := s.js.AddStream(sc)
+		if addErr == nil {
+			return info, nil
 		}
-	}
-	if updateCfg.Replicas == 0 {
-		updateCfg.Replicas = defaultStreamReplicas
-	}
 
-	info, updateErr := s.js.UpdateStream(updateCfg)
-	if updateErr != nil {
-		return nil, fmt.Errorf("create or update stream %q: add: %w; update: %w", cfg.Name, addErr, updateErr)
-	}
+		// On update, preserve existing replica count when caller left Replicas unset.
+		updateCfg := toNatsStreamConfig(cfg)
+		if cfg.Replicas == 0 {
+			if existing, infoErr := s.js.StreamInfo(cfg.Name); infoErr == nil && existing != nil {
+				updateCfg.Replicas = existing.Config.Replicas
+			}
+		}
+		if updateCfg.Replicas == 0 {
+			updateCfg.Replicas = defaultStreamReplicas
+		}
 
-	return info, nil
+		info, updateErr := s.js.UpdateStream(updateCfg)
+		if updateErr != nil {
+			return nil, fmt.Errorf("create or update stream %q: add: %w; update: %w", cfg.Name, addErr, updateErr)
+		}
+
+		return info, nil
+	})
 }
 
-func (s *streamManager) AddStream(_ context.Context, cfg *natspkg.StreamConfig) (*natspkg.StreamInfo, error) {
+func (s *streamManager) AddStream(ctx context.Context, cfg *natspkg.StreamConfig) (*natspkg.StreamInfo, error) {
+	if err := ctxReady(ctx); err != nil {
+		return nil, err
+	}
 	if cfg == nil {
 		return nil, fmt.Errorf("add stream: %w", ErrEmptyConfigNotAllowed)
 	}
@@ -127,15 +135,20 @@ func (s *streamManager) AddStream(_ context.Context, cfg *natspkg.StreamConfig) 
 		return nil, err
 	}
 
-	info, err := s.js.AddStream(cfg)
-	if err != nil {
-		return nil, fmt.Errorf("add stream %q: %w", cfg.Name, err)
-	}
+	return runWithContextValue(ctx, func() (*natspkg.StreamInfo, error) {
+		info, err := s.js.AddStream(cfg)
+		if err != nil {
+			return nil, fmt.Errorf("add stream %q: %w", cfg.Name, err)
+		}
 
-	return info, nil
+		return info, nil
+	})
 }
 
-func (s *streamManager) UpdateStream(_ context.Context, cfg *natspkg.StreamConfig) (*natspkg.StreamInfo, error) {
+func (s *streamManager) UpdateStream(ctx context.Context, cfg *natspkg.StreamConfig) (*natspkg.StreamInfo, error) {
+	if err := ctxReady(ctx); err != nil {
+		return nil, err
+	}
 	if cfg == nil {
 		return nil, fmt.Errorf("update stream: %w", ErrEmptyConfigNotAllowed)
 	}
@@ -144,37 +157,49 @@ func (s *streamManager) UpdateStream(_ context.Context, cfg *natspkg.StreamConfi
 		return nil, err
 	}
 
-	info, err := s.js.UpdateStream(cfg)
-	if err != nil {
-		return nil, fmt.Errorf("update stream %q: %w", cfg.Name, err)
-	}
+	return runWithContextValue(ctx, func() (*natspkg.StreamInfo, error) {
+		info, err := s.js.UpdateStream(cfg)
+		if err != nil {
+			return nil, fmt.Errorf("update stream %q: %w", cfg.Name, err)
+		}
 
-	return info, nil
+		return info, nil
+	})
 }
 
-func (s *streamManager) DeleteStream(_ context.Context, name string) error {
+func (s *streamManager) DeleteStream(ctx context.Context, name string) error {
+	if err := ctxReady(ctx); err != nil {
+		return err
+	}
 	if err := ValidateStreamName(name); err != nil {
 		return err
 	}
 
-	if err := s.js.DeleteStream(name); err != nil {
-		return fmt.Errorf("delete stream %q: %w", name, err)
-	}
+	return runWithContext(ctx, func() error {
+		if err := s.js.DeleteStream(name); err != nil {
+			return fmt.Errorf("delete stream %q: %w", name, err)
+		}
 
-	return nil
+		return nil
+	})
 }
 
-func (s *streamManager) StreamInfo(_ context.Context, name string) (*natspkg.StreamInfo, error) {
+func (s *streamManager) StreamInfo(ctx context.Context, name string) (*natspkg.StreamInfo, error) {
+	if err := ctxReady(ctx); err != nil {
+		return nil, err
+	}
 	if err := ValidateStreamName(name); err != nil {
 		return nil, err
 	}
 
-	info, err := s.js.StreamInfo(name)
-	if err != nil {
-		return nil, fmt.Errorf("stream info %q: %w", name, err)
-	}
+	return runWithContextValue(ctx, func() (*natspkg.StreamInfo, error) {
+		info, err := s.js.StreamInfo(name)
+		if err != nil {
+			return nil, fmt.Errorf("stream info %q: %w", name, err)
+		}
 
-	return info, nil
+		return info, nil
+	})
 }
 
 func (s *streamManager) streamNames() []string {

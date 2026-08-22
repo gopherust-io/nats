@@ -50,6 +50,7 @@ type Config struct {
 	Conn             Connection
 	Backpressure     BackpressureConfig
 	AdaptivePressure AdaptivePressureConfig
+	Circuit          CircuitConfig
 }
 
 // ConsumerConfig is an alias kept for backward compatibility.
@@ -94,6 +95,8 @@ type Connection struct {
 	// Mutually exclusive with Seed, User/Password, and Secret.
 	CredentialsFile string
 	MetricPrefix    string
+	// Domain selects a JetStream domain ($JS.<domain>.API) for multi-domain / hub leaf setups.
+	Domain string
 
 	ClientName string
 	// TLS configures secure connections (mTLS / CA verification).

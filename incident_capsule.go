@@ -25,6 +25,10 @@ const (
 // IncidentTrigger classifies why a capsule was captured.
 type IncidentTrigger string
 
+func (it IncidentTrigger) String() string {
+	return string(it)
+}
+
 const (
 	TriggerManual         IncidentTrigger = "manual"
 	TriggerDLQ            IncidentTrigger = "dlq"
@@ -85,6 +89,7 @@ type Incidents interface {
 	// List returns capsule IDs for stream/consumer. Empty indexBucket uses DefaultIncidentIndexBucket.
 	List(ctx context.Context, stream, consumer, indexBucket string) ([]string, error)
 	ReplayLocal(ctx context.Context, capsule *Capsule, handler MsgHandler) error
+	AttachToHandler(stream, durable string, cfg CapsuleAutoConfig, handler MsgHandler) MsgHandler
 }
 
 type incidents struct {

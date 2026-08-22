@@ -14,7 +14,7 @@ func FuzzDecodeJSON(f *testing.F) {
 		var dst map[string]any
 		msg := &natspkg.Msg{
 			Data:   data,
-			Header: natspkg.Header{HeaderContentType: []string{ContentTypeJSON}},
+			Header: natspkg.Header{HeaderNatsContentType: []string{ContentTypeJSON}},
 		}
 		_ = DecodeMsg(msg, JSON, &dst)
 	})

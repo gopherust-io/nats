@@ -83,7 +83,7 @@ func TestDecodeMsgUsesHeaderType(t *testing.T) {
 
 	msg := &natspkg.Msg{
 		Data:   body,
-		Header: natspkg.Header{HeaderContentType: []string{ContentTypeJSON}},
+		Header: natspkg.Header{HeaderNatsContentType: []string{ContentTypeJSON}},
 	}
 
 	var decoded payload
@@ -95,13 +95,13 @@ func TestMessageTypeFromHeader(t *testing.T) {
 	assert.Equal(t, JSON, MessageTypeFromHeader(nil))
 	assert.Equal(t, JSON, MessageTypeFromHeader(natspkg.Header{}))
 	assert.Equal(t, Proto, MessageTypeFromHeader(natspkg.Header{
-		HeaderContentType: []string{ContentTypeProto},
+		HeaderNatsContentType: []string{ContentTypeProto},
 	}))
 	assert.Equal(t, MessagePack, MessageTypeFromHeader(natspkg.Header{
-		HeaderContentType: []string{ContentTypeMsgPack},
+		HeaderNatsContentType: []string{ContentTypeMsgPack},
 	}))
 	assert.Equal(t, JSON, MessageTypeFromHeader(natspkg.Header{
-		HeaderContentType: []string{"unknown"},
+		HeaderNatsContentType: []string{"unknown"},
 	}))
 }
 
@@ -118,7 +118,7 @@ func TestNeedsContentTypeHeader(t *testing.T) {
 	assert.True(t, needsContentTypeHeader(Message{MessageType: Proto}))
 	assert.False(t, needsContentTypeHeader(Message{
 		MessageType: JSON,
-		Header:      map[string][]string{HeaderContentType: headerValueJSON},
+		Header:      map[string][]string{HeaderNatsContentType: headerValueJSON},
 	}))
 	assert.True(t, needsContentTypeHeader(Message{
 		MessageType: JSON,
@@ -134,19 +134,19 @@ func TestApplyContentTypeHeader(t *testing.T) {
 	t.Run("proto", func(t *testing.T) {
 		msg := Message{MessageType: Proto}
 		applyContentTypeHeader(&msg)
-		assert.Equal(t, ContentTypeProto, msg.Header[HeaderContentType][0])
+		assert.Equal(t, ContentTypeProto, msg.Header[HeaderNatsContentType][0])
 	})
 
 	t.Run("msgpack", func(t *testing.T) {
 		msg := Message{MessageType: MessagePack}
 		applyContentTypeHeader(&msg)
-		assert.Equal(t, ContentTypeMsgPack, msg.Header[HeaderContentType][0])
+		assert.Equal(t, ContentTypeMsgPack, msg.Header[HeaderNatsContentType][0])
 	})
 
 	t.Run("json", func(t *testing.T) {
 		msg := Message{MessageType: JSON}
 		applyContentTypeHeader(&msg)
-		assert.Equal(t, ContentTypeJSON, msg.Header[HeaderContentType][0])
+		assert.Equal(t, ContentTypeJSON, msg.Header[HeaderNatsContentType][0])
 	})
 
 	t.Run("existing header map", func(t *testing.T) {
@@ -155,7 +155,7 @@ func TestApplyContentTypeHeader(t *testing.T) {
 			Header:      map[string][]string{"trace": {"1"}},
 		}
 		applyContentTypeHeader(&msg)
-		assert.Equal(t, ContentTypeProto, msg.Header[HeaderContentType][0])
+		assert.Equal(t, ContentTypeProto, msg.Header[HeaderNatsContentType][0])
 		assert.Equal(t, []string{"1"}, msg.Header["trace"])
 	})
 }

@@ -201,7 +201,7 @@ func TestDecodeMsgDecompresses(t *testing.T) {
 	msg := &natspkg.Msg{
 		Data: compressed,
 		Header: natspkg.Header{
-			HeaderContentType:     []string{ContentTypeJSON},
+			HeaderNatsContentType: []string{ContentTypeJSON},
 			HeaderContentEncoding: []string{enc},
 		},
 	}

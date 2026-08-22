@@ -143,7 +143,7 @@ func MessageTypeFromHeader(h natspkg.Header) MessageType {
 		return JSON
 	}
 
-	switch h.Get(HeaderContentType) {
+	switch h.Get(HeaderNATSContentType) {
 	case ContentTypeProto:
 		return Proto
 	case ContentTypeMsgPack:
@@ -169,15 +169,15 @@ func applyContentTypeHeader(msg *Message) {
 
 	switch msg.MessageType {
 	case Proto:
-		msg.Header[HeaderContentType] = headerValueProto
+		msg.Header[HeaderNATSContentType] = headerValueProto
 	case MessagePack:
-		msg.Header[HeaderContentType] = headerValueMsgPack
+		msg.Header[HeaderNATSContentType] = headerValueMsgPack
 	case Raw:
 		// Preserve caller headers; do not invent a content type.
 	case JSON:
-		msg.Header[HeaderContentType] = headerValueJSON
+		msg.Header[HeaderNATSContentType] = headerValueJSON
 	default:
-		msg.Header[HeaderContentType] = headerValueJSON
+		msg.Header[HeaderNATSContentType] = headerValueJSON
 	}
 }
 
@@ -191,7 +191,7 @@ func needsContentTypeHeader(msg Message) bool {
 			return false
 		}
 
-		_, ok := msg.Header[HeaderContentType]
+		_, ok := msg.Header[HeaderNATSContentType]
 
 		return !ok
 	}
@@ -200,7 +200,7 @@ func needsContentTypeHeader(msg Message) bool {
 		return true
 	}
 
-	_, ok := msg.Header[HeaderContentType]
+	_, ok := msg.Header[HeaderNATSContentType]
 
 	return !ok
 }

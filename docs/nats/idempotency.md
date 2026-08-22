@@ -5,7 +5,7 @@ JetStream gives you **at-least-once** delivery: after a crash or Nak, the same m
 | Layer | Who | When |
 |-------|-----|------|
 | **Publish** | JetStream `DuplicateWindow` + `Nats-Msg-Id` | Same ID within the window → not stored twice |
-| **Consume** | Your app (KV / Bloom / DB) | Handler already processed this business key → Ack and skip |
+| **Consume** | Your app (KV / DB) | Handler already processed this business key → Ack and skip |
 
 Flow overview: [How JetStream works](README.md#end-to-end-publish-flow).
 
@@ -79,15 +79,6 @@ type ClaimStore interface {
 ```
 
 **TTL guidance:** set a positive `TTL` on the bucket (and optionally `MaxBytes`). `TTL: 0` with no size limit can still grow until the JetStream account is exhausted. `CreateOrUpdate` updates bucket config (including TTL) when the bucket already exists.
-
-### BloomStore (in-memory only)
-
-`idempotency.NewBloomStore` is a **probabilistic Seen filter** for hot paths. It implements `DedupStore` (Seen/Mark) but **not** `ClaimStore` — do **not** use it alone under competing queue workers (race: two workers can both miss Seen before Mark). Prefer:
-
-- `NewKVStore` + `WithHandler` for production queues, or
-- `NewBloomStore(...).WithBackend(kvStore)` as a front cache in front of KV
-
-False positives skip work (safe if handlers are idempotent). Bloom alone is not durable across process restart.
 
 ## What JetStream does not provide
 

@@ -36,6 +36,7 @@ Core NATS pub/sub is fire-and-forget. This library is **JetStream-first**: persi
 |-------|---------------------|
 | [Streams & subjects](streams-and-subjects.md) | Retention, what gets stored, delete vs cursor |
 | [Consumers & binding](consumers-and-binding.md) | Create durables, bind push/pull, filters |
+| [Consol integration](consol-integration.md) | Fingerprint + incident capsule contracts for nats-console |
 | [Push vs pull](push-vs-pull.md) | Which delivery model + tuning knobs |
 | [Consumer tuning guide](consumer-tuning-guide.md) | Progressive worker/pool/backpressure tuning |
 | [Optimal setups](optimal-setups.md) | Starting values by workload pattern |

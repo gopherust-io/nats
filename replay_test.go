@@ -187,7 +187,7 @@ func TestReplayGetMsgFromHeader(t *testing.T) {
 			1: {
 				Sequence: 1,
 				Data:     []byte{0x01},
-				Header:   natspkg.Header{HeaderContentType: []string{ContentTypeProto}},
+				Header:   natspkg.Header{HeaderNATSContentType: []string{ContentTypeProto}},
 			},
 		},
 	}, &mockConsumerManager{})

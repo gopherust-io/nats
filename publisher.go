@@ -143,11 +143,14 @@ func (p *publisher) preparePublish(ctx context.Context, subject string, msg Mess
 	return preparedPublish{data: data, msg: msg}, span, nil
 }
 
-func (p *publisher) publishMsg(subject string, prep preparedPublish) error {
+func (p *publisher) publishMsg(ctx context.Context, subject string, prep preparedPublish) error {
 	pubOpts := publishOptsFromMessage(prep.msg)
+	if ctx != nil {
+		pubOpts = append(pubOpts, natspkg.Context(ctx))
+	}
 
-	if len(prep.msg.Header) == 0 && len(pubOpts) == 0 {
-		_, err := p.js.Publish(subject, prep.data)
+	if len(prep.msg.Header) == 0 {
+		_, err := p.js.Publish(subject, prep.data, pubOpts...)
 
 		return err
 	}
@@ -247,7 +250,7 @@ func (p *publisher) PublishMessage(ctx context.Context, subject string, msg Mess
 		start = time.Now().UnixNano()
 	}
 
-	err = p.publishMsg(subject, prep)
+	err = p.publishMsg(ctx, subject, prep)
 	if err != nil {
 		publishErr = err
 		p.recordError(ctx, subject)
@@ -338,7 +341,11 @@ func (p *publisher) PublishRaw(ctx context.Context, subject string, data []byte,
 		msg.Header = natspkg.Header(hdr)
 	}
 
-	ack, err := p.js.PublishMsg(msg)
+	var pubOpts []natspkg.PubOpt
+	if ctx != nil {
+		pubOpts = append(pubOpts, natspkg.Context(ctx))
+	}
+	ack, err := p.js.PublishMsg(msg, pubOpts...)
 	if err != nil {
 		p.recordError(ctx, subject)
 

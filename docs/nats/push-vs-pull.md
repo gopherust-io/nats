@@ -185,7 +185,7 @@ err = pull.Process(ctx, handler,
 )
 ```
 
-Missed pull heartbeats return `ErrNoHeartbeat` (counted as `idle_heartbeat_misses`); `Process` treats them like fetch timeouts and retries. `Fetch`/`Process` honor `context` cancellation mid-wait via `nats.Context(ctx)`.
+Missed pull heartbeats return `ErrNoHeartbeat` (counted as `idle_heartbeat_misses`); `Process` treats them like fetch timeouts and retries. `Fetch`/`Process` honor `context` cancellation mid-wait: legacy pull via `nats.Context(ctx)`, pull v2 (default when jetstream v2 is bound) via `jetstream.FetchContext`.
 
 ### Tuning guide
 
