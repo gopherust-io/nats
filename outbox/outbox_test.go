@@ -84,3 +84,28 @@ func TestOutboxEnqueueFlush(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, keys)
 }
+
+func TestOutboxEnqueueFlushErrors(t *testing.T) {
+	t.Parallel()
+	_, err := outbox.Enqueue(context.Background(), nil, "s", nil, nil)
+	require.Error(t, err)
+	_, err = outbox.Enqueue(context.Background(), newMemStore(), "", nil, nil)
+	require.Error(t, err)
+
+	_, err = outbox.Flush(context.Background(), nil, &memPub{}, 1)
+	require.Error(t, err)
+	n, err := outbox.Flush(context.Background(), newMemStore(), &memPub{}, 0)
+	require.NoError(t, err)
+	assert.Equal(t, 0, n)
+
+	store := newMemStore()
+	_, err = outbox.Enqueue(context.Background(), store, "orders.a", []byte(`1`), map[string]string{"k": "v"})
+	require.NoError(t, err)
+	_, err = outbox.Enqueue(context.Background(), store, "orders.b", []byte(`2`), nil)
+	require.NoError(t, err)
+	pub := &memPub{}
+	n, err = outbox.Flush(context.Background(), store, pub, 1)
+	require.NoError(t, err)
+	assert.Equal(t, 1, n)
+	assert.Equal(t, 1, pub.n)
+}

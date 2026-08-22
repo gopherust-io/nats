@@ -37,11 +37,13 @@ func (m *memSource) GetNextMsgAfter(_ context.Context, _ string, seq uint64) (*n
 
 type memPub struct {
 	subjects []string
+	headers  []map[string][]string
 	count    int
 }
 
-func (p *memPub) PublishRaw(_ context.Context, subject string, _ dlq.RawPublish) error {
+func (p *memPub) PublishRaw(_ context.Context, subject string, msg dlq.RawPublish) error {
 	p.subjects = append(p.subjects, subject)
+	p.headers = append(p.headers, msg.Header)
 	p.count++
 
 	return nil
@@ -92,4 +94,19 @@ func TestReplayToStreamDryRunAndFilter(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 1, res.Published)
 	assert.Equal(t, []string{"orders.redrive"}, pub.subjects)
+
+	pub2 := &memPub{}
+	res, err = dlq.ReplayToStream(context.Background(), src, pub2, dlq.ReplayConfig{
+		SourceStream:    "DLQ",
+		DestSubject:     "orders.redrive",
+		StartSeq:        1,
+		Limit:           1,
+		StripDLQHeaders: true,
+		SubjectFilter:   "orders.created",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 1, res.Published)
+	require.Len(t, pub2.headers, 1)
+	_, hasReason := pub2.headers[0][dlq.HeaderReason]
+	assert.False(t, hasReason)
 }
