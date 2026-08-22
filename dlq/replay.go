@@ -31,11 +31,11 @@ type ReplayConfig struct {
 	// ReasonFilter matches X-NATS-DLQ-Reason when non-empty.
 	ReasonFilter string
 	// SubjectFilter matches X-NATS-Original-Subject when non-empty.
-	SubjectFilter string
-	StartSeq      uint64
-	Limit         int
-	RateLimit     time.Duration
-	DryRun        bool
+	SubjectFilter   string
+	StartSeq        uint64
+	Limit           int
+	RateLimit       time.Duration
+	DryRun          bool
 	StripDLQHeaders bool
 }
 

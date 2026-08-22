@@ -29,9 +29,9 @@ func (c CircuitConfig) withDefaults() CircuitConfig {
 
 // CircuitBreaker pauses pull fetches when pressure is critical (metric: circuit_open).
 type CircuitBreaker struct {
-	cfg    CircuitConfig
-	open   atomic.Bool
-	opens  atomic.Int64
+	cfg   CircuitConfig
+	open  atomic.Bool
+	opens atomic.Int64
 }
 
 // NewCircuitBreaker returns a breaker or nil when disabled.

@@ -16,17 +16,17 @@ import (
 //
 // goalign:ignore
 type OrderedConsumerConfig struct {
-	FilterSubjects       []string
-	FilterSubject        string
-	OptStartTime         *time.Time
-	NamePrefix           string
-	InactiveThreshold    time.Duration
-	OptStartSeq          uint64
-	DeliverPolicy        DeliverPolicy
-	ReplayPolicy         ReplayPolicy
-	HeadersOnly          bool
-	HasDeliverPolicy     bool
-	HasReplayPolicy      bool
+	FilterSubjects    []string
+	FilterSubject     string
+	OptStartTime      *time.Time
+	NamePrefix        string
+	InactiveThreshold time.Duration
+	OptStartSeq       uint64
+	DeliverPolicy     DeliverPolicy
+	ReplayPolicy      ReplayPolicy
+	HeadersOnly       bool
+	HasDeliverPolicy  bool
+	HasReplayPolicy   bool
 }
 
 // OrderedSubscription is a running ordered consume loop.

@@ -11,8 +11,8 @@ import (
 
 // Schema contract headers (optional; not a full registry).
 const (
-	HeaderSchema          = "X-NATS-Schema"
-	HeaderSchemaVersion   = "X-NATS-Schema-Version"
+	HeaderSchema           = "X-NATS-Schema"
+	HeaderSchemaVersion    = "X-NATS-Schema-Version"
 	HeaderContractEncoding = "X-NATS-Contract-Encoding"
 )
 
