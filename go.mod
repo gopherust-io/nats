@@ -7,7 +7,7 @@ require (
 	github.com/bytedance/sonic v1.15.2
 	github.com/gopherust-io/tel v0.4.0
 	github.com/klauspost/compress v1.19.2
-	github.com/nats-io/nats-server/v2 v2.14.5
+	github.com/nats-io/nats-server/v2 v2.14.6
 	github.com/nats-io/nats.go v1.53.1
 	github.com/nats-io/nkeys v0.4.16
 	github.com/nats-io/nuid v1.0.1
