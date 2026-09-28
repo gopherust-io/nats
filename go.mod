@@ -3,7 +3,7 @@ module github.com/gopherust-io/nats
 go 1.26.6
 
 require (
-	github.com/andybalholm/brotli v1.2.2
+	github.com/andybalholm/brotli v1.2.5
 	github.com/bytedance/sonic v1.15.2
 	github.com/gopherust-io/tel v0.4.0
 	github.com/klauspost/compress v1.19.2
