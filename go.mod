@@ -4,7 +4,7 @@ go 1.26.6
 
 require (
 	github.com/andybalholm/brotli v1.2.2
-	github.com/bytedance/sonic v1.15.2
+	github.com/bytedance/sonic v1.15.5
 	github.com/gopherust-io/tel v0.4.0
 	github.com/klauspost/compress v1.19.2
 	github.com/nats-io/nats-server/v2 v2.14.5
@@ -23,7 +23,7 @@ require (
 require (
 	github.com/antithesishq/antithesis-sdk-go v0.7.2 // indirect
 	github.com/bytedance/gopkg v0.1.4 // indirect
-	github.com/bytedance/sonic/loader v0.5.2 // indirect
+	github.com/bytedance/sonic/loader v0.5.3 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cloudwego/base64x v0.1.7 // indirect
