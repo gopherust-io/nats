@@ -9,7 +9,7 @@ require (
 	github.com/klauspost/compress v1.19.2
 	github.com/nats-io/nats-server/v2 v2.14.5
 	github.com/nats-io/nats.go v1.53.1
-	github.com/nats-io/nkeys v0.4.16
+	github.com/nats-io/nkeys v0.4.17
 	github.com/nats-io/nuid v1.0.1
 	github.com/rs/zerolog v1.35.1
 	github.com/stretchr/testify v1.12.1
